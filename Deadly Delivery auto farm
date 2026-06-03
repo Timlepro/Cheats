@@ -4,13 +4,9 @@ local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local touchGui = playerGui:WaitForChild("Touch")
-local rightFrame = touchGui:WaitForChild("Right")
-
-local interactButton = rightFrame:WaitForChild("InteractButton")
-local dropButton = rightFrame:WaitForChild("DropButton")
-
 local autoFarmEnabled = false
+local destroyed = false
+local buttonConnections = {}
 
 local gui = Instance.new("ScreenGui")
 gui.Name = "AutoFarmUI"
@@ -19,7 +15,7 @@ gui.Parent = playerGui
 
 local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0, 230, 0, 70)
-frame.Position = UDim2.new(0.5, 0, 0.14, 0)
+frame.Position = UDim2.new(0.5, 0, 0.12, 0)
 frame.AnchorPoint = Vector2.new(0.5, 0.5)
 frame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
 frame.BorderSizePixel = 0
@@ -39,6 +35,7 @@ toggleButton.Text = "Auto Farm : OFF"
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.TextScaled = true
 toggleButton.Font = Enum.Font.GothamBold
+toggleButton.Active = true
 toggleButton.Parent = frame
 
 local toggleCorner = Instance.new("UICorner")
@@ -55,6 +52,7 @@ closeButton.Text = "X"
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeButton.TextScaled = true
 closeButton.Font = Enum.Font.GothamBold
+closeButton.Active = true
 closeButton.Parent = frame
 
 local closeCorner = Instance.new("UICorner")
@@ -81,7 +79,40 @@ local function SetAutoFarm(state)
 	end
 end
 
+local function ConnectButton(buttonObject, callback)
+	if not buttonObject then return end
+	if not buttonObject:IsA("GuiButton") then return end
+
+	buttonObject.Active = true
+
+	local connection = buttonObject.Activated:Connect(function()
+		if destroyed then return end
+		callback()
+	end)
+
+	table.insert(buttonConnections, connection)
+end
+
+ConnectButton(toggleButton, function()
+	SetAutoFarm(not autoFarmEnabled)
+end)
+
+ConnectButton(closeButton, function()
+	destroyed = true
+	autoFarmEnabled = false
+
+	for _, connection in ipairs(buttonConnections) do
+		if connection then
+			connection:Disconnect()
+		end
+	end
+
+	gui:Destroy()
+	script:Destroy()
+end)
+
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if destroyed then return end
 	if gameProcessed then return end
 
 	if input.KeyCode == Enum.KeyCode.E then
@@ -93,19 +124,29 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
-interactButton.MouseButton1Click:Connect(function()
-	OpenContainer()
-end)
+task.spawn(function()
+	while not destroyed do
+		local touchGui = playerGui:FindFirstChild("Touch")
 
-dropButton.MouseButton1Click:Connect(function()
-	DropItem()
-end)
+		if touchGui then
+			local rightFrame = touchGui:FindFirstChild("Right")
 
-toggleButton.MouseButton1Click:Connect(function()
-	SetAutoFarm(not autoFarmEnabled)
-end)
+			if rightFrame then
+				local interactButton = rightFrame:FindFirstChild("InteractButton")
+				local dropButton = rightFrame:FindFirstChild("DropButton")
 
-closeButton.MouseButton1Click:Connect(function()
-	gui:Destroy()
-	script:Destroy()
+				if interactButton then
+					ConnectButton(interactButton, OpenContainer)
+				end
+
+				if dropButton then
+					ConnectButton(dropButton, DropItem)
+				end
+
+				break
+			end
+		end
+
+		task.wait(0.5)
+	end
 end)
