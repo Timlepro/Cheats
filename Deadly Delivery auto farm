@@ -11,17 +11,18 @@ local autoFarmEnabled = false
 local farming = false
 local currentTargetPart = nil
 local connections = {}
-local usedModels = {}
 
 local moveSpeed = 700
 local underOffset = 2.2
-local openDelay = 0.15
+local openDelay = 0.12
 local finalPosition = Vector3.new(-321.5, 328, 405.5)
 
 local allowedNames = {
 	Cabinet = true,
 	Crate = true,
-	OilBucket = true
+	OilBucket = true,
+	SoilMound = true,
+	Fridge = true
 }
 
 local oldCameraType = camera.CameraType
@@ -36,7 +37,7 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 230, 0, 70)
+mainFrame.Size = UDim2.new(0, 250, 0, 65)
 mainFrame.Position = UDim2.new(0.5, 0, 0.06, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
@@ -45,7 +46,7 @@ mainFrame.Active = true
 mainFrame.Parent = screenGui
 
 local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(1, 0)
+mainCorner.CornerRadius = UDim.new(0, 10)
 mainCorner.Parent = mainFrame
 
 local toggleButton = Instance.new("TextButton")
@@ -62,7 +63,7 @@ toggleButton.Active = true
 toggleButton.Parent = mainFrame
 
 local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(1, 0)
+toggleCorner.CornerRadius = UDim.new(0, 8)
 toggleCorner.Parent = toggleButton
 
 local closeButton = Instance.new("TextButton")
@@ -79,7 +80,7 @@ closeButton.Active = true
 closeButton.Parent = mainFrame
 
 local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(1, 0)
+closeCorner.CornerRadius = UDim.new(0, 8)
 closeCorner.Parent = closeButton
 
 local function GetCharacter()
@@ -216,14 +217,18 @@ local function GetTargets()
 	end
 
 	for _, model in ipairs(folder:GetChildren()) do
-		if IsValidModel(model) and not usedModels[model] then
-			local part = GetInteractablePart(model)
+		if IsValidModel(model) then
+			local isOpen = model:GetAttribute("Open")
 
-			if part then
-				table.insert(targets, {
-					model = model,
-					part = part
-				})
+			if isOpen == false then
+				local part = GetInteractablePart(model)
+
+				if part then
+					table.insert(targets, {
+						model = model,
+						part = part
+					})
+				end
 			end
 		end
 	end
@@ -274,7 +279,23 @@ local function OpenContainer(model, part)
 		pcall(function()
 			prompt:InputHoldEnd()
 		end)
+	else
+		task.wait(openDelay)
 	end
+end
+
+local function WaitOpen(model)
+	local startTime = os.clock()
+
+	while autoFarmEnabled and not destroyed and os.clock() - startTime < 0.8 do
+		if model:GetAttribute("Open") == true then
+			return true
+		end
+
+		task.wait(0.05)
+	end
+
+	return model:GetAttribute("Open") == true
 end
 
 local function FarmOne(target)
@@ -293,13 +314,13 @@ local function FarmOne(target)
 	currentTargetPart = part
 	FreezePlayer()
 
-	task.wait(0.05)
+	task.wait(0.03)
 
 	OpenContainer(model, part)
+	WaitOpen(model)
 
-	task.wait(0.1)
+	task.wait(0.05)
 
-	usedModels[model] = true
 	currentTargetPart = nil
 	UnfreezePlayer()
 end
@@ -325,7 +346,7 @@ local function StartFarm()
 			task.wait(0.5)
 		end
 
-		task.wait(0.05)
+		task.wait(0.03)
 	end
 
 	currentTargetPart = nil
