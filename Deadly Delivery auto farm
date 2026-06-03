@@ -4,14 +4,27 @@ local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
 
 local autoFarm = false
 local isBusy = false
+local scriptDestroyed = false
 
-local MOVE_SPEED = 350 -- plus haut = plus rapide
-local UNDER_OFFSET = 4 -- distance sous la part
+local MOVE_SPEED = 350
+local UNDER_OFFSET = 4
+local INTERACTION_TIME = 1.5
+local SPAM_DELAY = 0.08
 
 local usedItems = {}
+local connections = {}
+
+local currentLockPart = nil
+
+local oldCameraType = camera.CameraType
+local oldWalkSpeed = nil
+local oldJumpPower = nil
+local oldJumpHeight = nil
+local oldAutoRotate = nil
 
 local allowedNames = {
 	Cabinet = true,
@@ -26,8 +39,11 @@ gui.Parent = playerGui
 
 local frame = Instance.new("Frame")
 frame.Name = "MainFrame"
-frame.Size = UDim2.new(0.22, 0, 0.08, 0)
-frame.Position = UDim2.new(0.5, 0, 0.88, 0)
+frame.Size = UDim2.new(0.24, 0, 0.08, 0)
+
+-- Plus haut sur l'écran
+frame.Position = UDim2.new(0.5, 0, 0.25, 0)
+
 frame.AnchorPoint = Vector2.new(0.5, 0.5)
 frame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
 frame.BorderSizePixel = 0
@@ -38,14 +54,14 @@ frameCorner.CornerRadius = UDim.new(1, 0)
 frameCorner.Parent = frame
 
 local sizeLimit = Instance.new("UISizeConstraint")
-sizeLimit.MinSize = Vector2.new(170, 55)
-sizeLimit.MaxSize = Vector2.new(280, 85)
+sizeLimit.MinSize = Vector2.new(190, 60)
+sizeLimit.MaxSize = Vector2.new(310, 90)
 sizeLimit.Parent = frame
 
 local button = Instance.new("TextButton")
 button.Name = "ToggleButton"
-button.Size = UDim2.new(0.9, 0, 0.7, 0)
-button.Position = UDim2.new(0.5, 0, 0.5, 0)
+button.Size = UDim2.new(0.72, 0, 0.68, 0)
+button.Position = UDim2.new(0.42, 0, 0.5, 0)
 button.AnchorPoint = Vector2.new(0.5, 0.5)
 button.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
 button.BorderSizePixel = 0
@@ -59,13 +75,87 @@ local buttonCorner = Instance.new("UICorner")
 buttonCorner.CornerRadius = UDim.new(1, 0)
 buttonCorner.Parent = button
 
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0.18, 0, 0.68, 0)
+closeButton.Position = UDim2.new(0.88, 0, 0.5, 0)
+closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
+closeButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextScaled = true
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Parent = frame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(1, 0)
+closeCorner.Parent = closeButton
+
 local function getCharacter()
 	return player.Character or player.CharacterAdded:Wait()
+end
+
+local function getHumanoid()
+	local character = getCharacter()
+	return character:WaitForChild("Humanoid")
 end
 
 local function getRootPart()
 	local character = getCharacter()
 	return character:WaitForChild("HumanoidRootPart")
+end
+
+local function saveMovement()
+	local humanoid = getHumanoid()
+
+	if oldWalkSpeed == nil then
+		oldWalkSpeed = humanoid.WalkSpeed
+		oldJumpPower = humanoid.JumpPower
+		oldJumpHeight = humanoid.JumpHeight
+		oldAutoRotate = humanoid.AutoRotate
+	end
+end
+
+local function freezePlayer()
+	local humanoid = getHumanoid()
+	local rootPart = getRootPart()
+
+	saveMovement()
+
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+	humanoid.JumpHeight = 0
+	humanoid.AutoRotate = false
+
+	rootPart.AssemblyLinearVelocity = Vector3.zero
+	rootPart.AssemblyAngularVelocity = Vector3.zero
+end
+
+local function unfreezePlayer()
+	local humanoid = getHumanoid()
+
+	if oldWalkSpeed ~= nil then
+		humanoid.WalkSpeed = oldWalkSpeed
+		humanoid.JumpPower = oldJumpPower
+		humanoid.JumpHeight = oldJumpHeight
+		humanoid.AutoRotate = oldAutoRotate
+	end
+
+	oldWalkSpeed = nil
+	oldJumpPower = nil
+	oldJumpHeight = nil
+	oldAutoRotate = nil
+end
+
+local function disablePlayerCollisions()
+	local character = getCharacter()
+
+	for _, object in ipairs(character:GetDescendants()) do
+		if object:IsA("BasePart") then
+			object.CanCollide = false
+		end
+	end
 end
 
 local function isValidModel(model)
@@ -106,9 +196,23 @@ local function getPrompt(model, interactablePart)
 		return prompt
 	end
 
-	prompt = model:FindFirstChildWhichIsA("ProximityPrompt", true)
+	return model:FindFirstChildWhichIsA("ProximityPrompt", true)
+end
 
-	return prompt
+local function setupPromptForPC(prompt)
+	if not prompt then return end
+
+	pcall(function()
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+	end)
+
+	pcall(function()
+		prompt.RequiresLineOfSight = false
+	end)
+
+	pcall(function()
+		prompt.MaxActivationDistance = 20
+	end)
 end
 
 local function getAllTargets()
@@ -136,24 +240,18 @@ local function getAllTargets()
 	return targets
 end
 
-local function disablePlayerCollisions()
-	local character = getCharacter()
+local function getUnderCFrame(part)
+	local targetPosition = part.Position - Vector3.new(0, UNDER_OFFSET, 0)
 
-	for _, object in ipairs(character:GetDescendants()) do
-		if object:IsA("BasePart") then
-			object.CanCollide = false
-		end
-	end
+	-- Le joueur regarde la part au-dessus de lui
+	return CFrame.lookAt(targetPosition, part.Position)
 end
 
 local function moveFastUnderPart(part)
 	local rootPart = getRootPart()
 
-	local targetPosition = part.Position - Vector3.new(0, UNDER_OFFSET, 0)
-
-	local targetCFrame = CFrame.lookAt(targetPosition, part.Position)
-
-	local distance = (rootPart.Position - targetPosition).Magnitude
+	local targetCFrame = getUnderCFrame(part)
+	local distance = (rootPart.Position - targetCFrame.Position).Magnitude
 	local duration = math.clamp(distance / MOVE_SPEED, 0.05, 1.5)
 
 	local tween = TweenService:Create(
@@ -168,26 +266,43 @@ local function moveFastUnderPart(part)
 	rootPart.CFrame = targetCFrame
 end
 
-local function interactWithItem(model, interactablePart)
-	local prompt = getPrompt(model, interactablePart)
+local function spamPrompt(prompt)
+	if not prompt then return end
 
-	if prompt then
-		prompt.Enabled = true
+	local startTime = os.clock()
 
+	while autoFarm and not scriptDestroyed and os.clock() - startTime < INTERACTION_TIME do
 		pcall(function()
 			prompt:InputHoldBegin()
 		end)
 
-		task.wait(math.max(prompt.HoldDuration + 0.15, 0.2))
+		task.wait(SPAM_DELAY)
 
 		pcall(function()
 			prompt:InputHoldEnd()
 		end)
+
+		task.wait(SPAM_DELAY)
+	end
+end
+
+local function interactWithItem(model, interactablePart)
+	local prompt = getPrompt(model, interactablePart)
+
+	setupPromptForPC(prompt)
+
+	currentLockPart = interactablePart
+	freezePlayer()
+
+	if prompt then
+		spamPrompt(prompt)
 	else
 		warn("Aucun ProximityPrompt trouvé dans :", model.Name)
+		task.wait(0.5)
 	end
 
-	task.wait(0.25)
+	currentLockPart = nil
+	unfreezePlayer()
 
 	if interactablePart and interactablePart.Parent then
 		interactablePart:Destroy()
@@ -196,18 +311,48 @@ local function interactWithItem(model, interactablePart)
 	usedItems[model] = true
 end
 
+local renderConnection = RunService.RenderStepped:Connect(function()
+	if scriptDestroyed then return end
+
+	if autoFarm then
+		disablePlayerCollisions()
+	end
+
+	if currentLockPart and currentLockPart.Parent then
+		local rootPart = getRootPart()
+		local lockCFrame = getUnderCFrame(currentLockPart)
+
+		rootPart.CFrame = lockCFrame
+		rootPart.AssemblyLinearVelocity = Vector3.zero
+		rootPart.AssemblyAngularVelocity = Vector3.zero
+
+		camera.CameraType = Enum.CameraType.Scriptable
+
+		local cameraPosition = rootPart.Position + Vector3.new(0, 1.5, 0)
+		local lookPosition = currentLockPart.Position + Vector3.new(0, 1, 0)
+
+		camera.CFrame = CFrame.lookAt(cameraPosition, lookPosition)
+	else
+		if not scriptDestroyed then
+			camera.CameraType = oldCameraType
+		end
+	end
+end)
+
+table.insert(connections, renderConnection)
+
 local function startAutoFarm()
 	if isBusy then return end
 	isBusy = true
 
-	while autoFarm do
+	while autoFarm and not scriptDestroyed do
 		local targets = getAllTargets()
 
 		if #targets == 0 then
-			task.wait(0.5)
+			task.wait(0.4)
 		else
 			for _, target in ipairs(targets) do
-				if not autoFarm then
+				if not autoFarm or scriptDestroyed then
 					break
 				end
 
@@ -216,11 +361,11 @@ local function startAutoFarm()
 
 					moveFastUnderPart(target.part)
 
-					task.wait(0.15)
+					task.wait(0.1)
 
 					interactWithItem(target.model, target.part)
 
-					task.wait(0.25)
+					task.wait(0.2)
 				end
 			end
 		end
@@ -228,16 +373,38 @@ local function startAutoFarm()
 		task.wait(0.1)
 	end
 
+	currentLockPart = nil
+	unfreezePlayer()
+	camera.CameraType = oldCameraType
+
 	isBusy = false
 end
 
-RunService.Stepped:Connect(function()
-	if autoFarm then
-		disablePlayerCollisions()
-	end
-end)
+local function destroyScript()
+	scriptDestroyed = true
+	autoFarm = false
+	currentLockPart = nil
 
-button.MouseButton1Click:Connect(function()
+	unfreezePlayer()
+
+	camera.CameraType = oldCameraType
+
+	for _, connection in ipairs(connections) do
+		if connection and connection.Disconnect then
+			connection:Disconnect()
+		end
+	end
+
+	if gui then
+		gui:Destroy()
+	end
+
+	script:Destroy()
+end
+
+local toggleConnection = button.MouseButton1Click:Connect(function()
+	if scriptDestroyed then return end
+
 	autoFarm = not autoFarm
 
 	if autoFarm then
@@ -248,5 +415,17 @@ button.MouseButton1Click:Connect(function()
 	else
 		button.Text = "Auto Farm : OFF"
 		button.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+
+		currentLockPart = nil
+		unfreezePlayer()
+		camera.CameraType = oldCameraType
 	end
 end)
+
+table.insert(connections, toggleConnection)
+
+local closeConnection = closeButton.MouseButton1Click:Connect(function()
+	destroyScript()
+end)
+
+table.insert(connections, closeConnection)
