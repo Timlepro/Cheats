@@ -14,7 +14,6 @@ local connections = {}
 
 local moveSpeed = 700
 local underOffset = 2.2
-local openDelay = 0.12
 local finalPosition = Vector3.new(-321.5, 328, 405.5)
 
 local allowedNames = {
@@ -150,6 +149,7 @@ end
 local function GetFolder()
 	local gameSystem = workspace:FindFirstChild("GameSystem")
 	if not gameSystem then return nil end
+
 	return gameSystem:FindFirstChild("InteractiveItem")
 end
 
@@ -269,30 +269,39 @@ local function OpenContainer(model, part)
 	local prompt = GetPrompt(model, part)
 	SetupPrompt(prompt)
 
-	if prompt then
+	if not prompt then
+		task.wait(0.05)
+		return
+	end
+
+	for i = 1, 5 do
+		if destroyed then return end
+		if not autoFarmEnabled then return end
+		if model:GetAttribute("Open") == true then return end
+
 		pcall(function()
 			prompt:InputHoldBegin()
 		end)
 
-		task.wait(openDelay)
+		task.wait(0.035)
 
 		pcall(function()
 			prompt:InputHoldEnd()
 		end)
-	else
-		task.wait(openDelay)
+
+		task.wait(0.035)
 	end
 end
 
 local function WaitOpen(model)
 	local startTime = os.clock()
 
-	while autoFarmEnabled and not destroyed and os.clock() - startTime < 0.8 do
+	while autoFarmEnabled and not destroyed and os.clock() - startTime < 0.5 do
 		if model:GetAttribute("Open") == true then
 			return true
 		end
 
-		task.wait(0.05)
+		task.wait(0.03)
 	end
 
 	return model:GetAttribute("Open") == true
@@ -319,7 +328,7 @@ local function FarmOne(target)
 	OpenContainer(model, part)
 	WaitOpen(model)
 
-	task.wait(0.05)
+	task.wait(0.03)
 
 	currentTargetPart = nil
 	UnfreezePlayer()
