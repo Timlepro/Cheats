@@ -4,26 +4,27 @@ local UserInputService = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local autoFarmEnabled = false
 local destroyed = false
-local buttonConnections = {}
+local autoFarmEnabled = false
+local connections = {}
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "AutoFarmUI"
-gui.ResetOnSpawn = false
-gui.Parent = playerGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoFarmUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 230, 0, 70)
-frame.Position = UDim2.new(0.5, 0, 0.12, 0)
-frame.AnchorPoint = Vector2.new(0.5, 0.5)
-frame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
-frame.BorderSizePixel = 0
-frame.Parent = gui
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 230, 0, 70)
+mainFrame.Position = UDim2.new(0.5, 0, 0.1, 0)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = screenGui
 
-local frameCorner = Instance.new("UICorner")
-frameCorner.CornerRadius = UDim.new(1, 0)
-frameCorner.Parent = frame
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(1, 0)
+mainCorner.Parent = mainFrame
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0.72, 0, 0.65, 0)
@@ -36,7 +37,7 @@ toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleButton.TextScaled = true
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.Active = true
-toggleButton.Parent = frame
+toggleButton.Parent = mainFrame
 
 local toggleCorner = Instance.new("UICorner")
 toggleCorner.CornerRadius = UDim.new(1, 0)
@@ -53,18 +54,18 @@ closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeButton.TextScaled = true
 closeButton.Font = Enum.Font.GothamBold
 closeButton.Active = true
-closeButton.Parent = frame
+closeButton.Parent = mainFrame
 
 local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(1, 0)
 closeCorner.Parent = closeButton
 
-local function OpenContainer()
-	print("OpenContainer")
+local function TriggerInteract()
+	print("INTERACT")
 end
 
-local function DropItem()
-	print("DropItem")
+local function TriggerDrop()
+	print("DROP")
 end
 
 local function SetAutoFarm(state)
@@ -79,50 +80,65 @@ local function SetAutoFarm(state)
 	end
 end
 
-local function ConnectButton(buttonObject, callback)
-	if not buttonObject then return end
-	if not buttonObject:IsA("GuiButton") then return end
+local function ConnectFramePress(frameObject, callback)
+	if not frameObject then return end
+	if not frameObject:IsA("GuiObject") then return end
 
-	buttonObject.Active = true
+	frameObject.Active = true
 
-	local connection = buttonObject.Activated:Connect(function()
+	local connection = frameObject.InputBegan:Connect(function(input)
 		if destroyed then return end
-		callback()
+
+		if input.UserInputType == Enum.UserInputType.Touch then
+			callback()
+		end
+
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			callback()
+		end
 	end)
 
-	table.insert(buttonConnections, connection)
+	table.insert(connections, connection)
 end
 
-ConnectButton(toggleButton, function()
-	SetAutoFarm(not autoFarmEnabled)
-end)
-
-ConnectButton(closeButton, function()
+local function DestroyAll()
 	destroyed = true
 	autoFarmEnabled = false
 
-	for _, connection in ipairs(buttonConnections) do
+	for _, connection in ipairs(connections) do
 		if connection then
 			connection:Disconnect()
 		end
 	end
 
-	gui:Destroy()
-	script:Destroy()
-end)
+	if screenGui then
+		screenGui:Destroy()
+	end
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	script:Destroy()
+end
+
+table.insert(connections, toggleButton.Activated:Connect(function()
+	if destroyed then return end
+	SetAutoFarm(not autoFarmEnabled)
+end))
+
+table.insert(connections, closeButton.Activated:Connect(function()
+	DestroyAll()
+end))
+
+table.insert(connections, UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if destroyed then return end
 	if gameProcessed then return end
 
 	if input.KeyCode == Enum.KeyCode.E then
-		OpenContainer()
+		TriggerInteract()
 	end
 
 	if input.KeyCode == Enum.KeyCode.G then
-		DropItem()
+		TriggerDrop()
 	end
-end)
+end))
 
 task.spawn(function()
 	while not destroyed do
@@ -132,21 +148,32 @@ task.spawn(function()
 			local rightFrame = touchGui:FindFirstChild("Right")
 
 			if rightFrame then
-				local interactButton = rightFrame:FindFirstChild("InteractButton")
-				local dropButton = rightFrame:FindFirstChild("DropButton")
+				local interactFrame = rightFrame:FindFirstChild("InteractButton")
+				local dropFrame = rightFrame:FindFirstChild("DropButton")
 
-				if interactButton then
-					ConnectButton(interactButton, OpenContainer)
+				if interactFrame then
+					ConnectFramePress(interactFrame, TriggerInteract)
 				end
 
-				if dropButton then
-					ConnectButton(dropButton, DropItem)
+				if dropFrame then
+					ConnectFramePress(dropFrame, TriggerDrop)
 				end
 
 				break
 			end
 		end
 
-		task.wait(0.5)
+		task.wait(0.25)
+	end
+end)
+
+task.spawn(function()
+	while not destroyed do
+		if autoFarmEnabled then
+			TriggerInteract()
+			task.wait(0.15)
+		else
+			task.wait(0.25)
+		end
 	end
 end)
