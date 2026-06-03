@@ -1,1 +1,252 @@
-print ("test n2 réussi")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local autoFarm = false
+local isBusy = false
+
+local MOVE_SPEED = 350 -- plus haut = plus rapide
+local UNDER_OFFSET = 4 -- distance sous la part
+
+local usedItems = {}
+
+local allowedNames = {
+	Cabinet = true,
+	Crate = true,
+	OilBucket = true,
+}
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "AutoFarmGui"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
+
+local frame = Instance.new("Frame")
+frame.Name = "MainFrame"
+frame.Size = UDim2.new(0.22, 0, 0.08, 0)
+frame.Position = UDim2.new(0.5, 0, 0.88, 0)
+frame.AnchorPoint = Vector2.new(0.5, 0.5)
+frame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
+frame.BorderSizePixel = 0
+frame.Parent = gui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(1, 0)
+frameCorner.Parent = frame
+
+local sizeLimit = Instance.new("UISizeConstraint")
+sizeLimit.MinSize = Vector2.new(170, 55)
+sizeLimit.MaxSize = Vector2.new(280, 85)
+sizeLimit.Parent = frame
+
+local button = Instance.new("TextButton")
+button.Name = "ToggleButton"
+button.Size = UDim2.new(0.9, 0, 0.7, 0)
+button.Position = UDim2.new(0.5, 0, 0.5, 0)
+button.AnchorPoint = Vector2.new(0.5, 0.5)
+button.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+button.BorderSizePixel = 0
+button.Text = "Auto Farm : OFF"
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.TextScaled = true
+button.Font = Enum.Font.GothamBold
+button.Parent = frame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(1, 0)
+buttonCorner.Parent = button
+
+local function getCharacter()
+	return player.Character or player.CharacterAdded:Wait()
+end
+
+local function getRootPart()
+	local character = getCharacter()
+	return character:WaitForChild("HumanoidRootPart")
+end
+
+local function isValidModel(model)
+	if not model:IsA("Model") then
+		return false
+	end
+
+	local nameType, number = model.Name:match("^(%a+)_([0-9]+)$")
+
+	if not nameType or not number then
+		return false
+	end
+
+	return allowedNames[nameType] == true
+end
+
+local function getInteractiveFolder()
+	local gameSystem = workspace:FindFirstChild("GameSystem")
+	if not gameSystem then return nil end
+
+	return gameSystem:FindFirstChild("InteractiveItem")
+end
+
+local function getInteractablePart(model)
+	local part = model:FindFirstChild("Interactable", true)
+
+	if part and part:IsA("BasePart") then
+		return part
+	end
+
+	return nil
+end
+
+local function getPrompt(model, interactablePart)
+	local prompt = interactablePart:FindFirstChildWhichIsA("ProximityPrompt", true)
+
+	if prompt then
+		return prompt
+	end
+
+	prompt = model:FindFirstChildWhichIsA("ProximityPrompt", true)
+
+	return prompt
+end
+
+local function getAllTargets()
+	local folder = getInteractiveFolder()
+	local targets = {}
+
+	if not folder then
+		warn("Folder introuvable : workspace.GameSystem.InteractiveItem")
+		return targets
+	end
+
+	for _, model in ipairs(folder:GetChildren()) do
+		if isValidModel(model) and not usedItems[model] then
+			local interactablePart = getInteractablePart(model)
+
+			if interactablePart then
+				table.insert(targets, {
+					model = model,
+					part = interactablePart,
+				})
+			end
+		end
+	end
+
+	return targets
+end
+
+local function disablePlayerCollisions()
+	local character = getCharacter()
+
+	for _, object in ipairs(character:GetDescendants()) do
+		if object:IsA("BasePart") then
+			object.CanCollide = false
+		end
+	end
+end
+
+local function moveFastUnderPart(part)
+	local rootPart = getRootPart()
+
+	local targetPosition = part.Position - Vector3.new(0, UNDER_OFFSET, 0)
+
+	local targetCFrame = CFrame.lookAt(targetPosition, part.Position)
+
+	local distance = (rootPart.Position - targetPosition).Magnitude
+	local duration = math.clamp(distance / MOVE_SPEED, 0.05, 1.5)
+
+	local tween = TweenService:Create(
+		rootPart,
+		TweenInfo.new(duration, Enum.EasingStyle.Linear),
+		{ CFrame = targetCFrame }
+	)
+
+	tween:Play()
+	tween.Completed:Wait()
+
+	rootPart.CFrame = targetCFrame
+end
+
+local function interactWithItem(model, interactablePart)
+	local prompt = getPrompt(model, interactablePart)
+
+	if prompt then
+		prompt.Enabled = true
+
+		pcall(function()
+			prompt:InputHoldBegin()
+		end)
+
+		task.wait(math.max(prompt.HoldDuration + 0.15, 0.2))
+
+		pcall(function()
+			prompt:InputHoldEnd()
+		end)
+	else
+		warn("Aucun ProximityPrompt trouvé dans :", model.Name)
+	end
+
+	task.wait(0.25)
+
+	if interactablePart and interactablePart.Parent then
+		interactablePart:Destroy()
+	end
+
+	usedItems[model] = true
+end
+
+local function startAutoFarm()
+	if isBusy then return end
+	isBusy = true
+
+	while autoFarm do
+		local targets = getAllTargets()
+
+		if #targets == 0 then
+			task.wait(0.5)
+		else
+			for _, target in ipairs(targets) do
+				if not autoFarm then
+					break
+				end
+
+				if target.model and target.model.Parent and target.part and target.part.Parent then
+					disablePlayerCollisions()
+
+					moveFastUnderPart(target.part)
+
+					task.wait(0.15)
+
+					interactWithItem(target.model, target.part)
+
+					task.wait(0.25)
+				end
+			end
+		end
+
+		task.wait(0.1)
+	end
+
+	isBusy = false
+end
+
+RunService.Stepped:Connect(function()
+	if autoFarm then
+		disablePlayerCollisions()
+	end
+end)
+
+button.MouseButton1Click:Connect(function()
+	autoFarm = not autoFarm
+
+	if autoFarm then
+		button.Text = "Auto Farm : ON"
+		button.BackgroundColor3 = Color3.fromRGB(40, 150, 70)
+
+		task.spawn(startAutoFarm)
+	else
+		button.Text = "Auto Farm : OFF"
+		button.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+	end
+end)
