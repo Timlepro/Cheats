@@ -1,12 +1,35 @@
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
 
 local destroyed = false
 local autoFarmEnabled = false
+local farming = false
+local currentTargetPart = nil
 local connections = {}
+local usedModels = {}
+
+local moveSpeed = 450
+local underOffset = 4
+local interactTime = 1.25
+local finalPosition = Vector3.new(-321.5, 323, 405.5)
+
+local allowedNames = {
+	Cabinet = true,
+	Crate = true,
+	OilBucket = true
+}
+
+local oldCameraType = camera.CameraType
+local oldWalkSpeed
+local oldJumpPower
+local oldJumpHeight
+local oldAutoRotate
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AutoFarmUI"
@@ -15,7 +38,7 @@ screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 230, 0, 70)
-mainFrame.Position = UDim2.new(0.5, 0, 0.1, 0)
+mainFrame.Position = UDim2.new(0.5, 0, 0.08, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
 mainFrame.BorderSizePixel = 0
@@ -60,50 +83,303 @@ local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(1, 0)
 closeCorner.Parent = closeButton
 
-local function TriggerInteract()
-	print("INTERACT")
+local function GetCharacter()
+	return player.Character or player.CharacterAdded:Wait()
 end
 
-local function TriggerDrop()
-	print("DROP")
+local function GetHumanoid()
+	return GetCharacter():WaitForChild("Humanoid")
 end
 
-local function SetAutoFarm(state)
+local function GetRoot()
+	return GetCharacter():WaitForChild("HumanoidRootPart")
+end
+
+local function SaveMovement()
+	local humanoid = GetHumanoid()
+
+	if oldWalkSpeed == nil then
+		oldWalkSpeed = humanoid.WalkSpeed
+		oldJumpPower = humanoid.JumpPower
+		oldJumpHeight = humanoid.JumpHeight
+		oldAutoRotate = humanoid.AutoRotate
+	end
+end
+
+local function FreezePlayer()
+	local humanoid = GetHumanoid()
+	local root = GetRoot()
+
+	SaveMovement()
+
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+	humanoid.JumpHeight = 0
+	humanoid.AutoRotate = false
+
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+end
+
+local function UnfreezePlayer()
+	local humanoid = GetHumanoid()
+
+	if oldWalkSpeed ~= nil then
+		humanoid.WalkSpeed = oldWalkSpeed
+		humanoid.JumpPower = oldJumpPower
+		humanoid.JumpHeight = oldJumpHeight
+		humanoid.AutoRotate = oldAutoRotate
+	end
+
+	oldWalkSpeed = nil
+	oldJumpPower = nil
+	oldJumpHeight = nil
+	oldAutoRotate = nil
+end
+
+local function DisableCollisions()
+	local character = GetCharacter()
+
+	for _, object in ipairs(character:GetDescendants()) do
+		if object:IsA("BasePart") then
+			object.CanCollide = false
+		end
+	end
+end
+
+local function IsValidModel(model)
+	if not model:IsA("Model") then
+		return false
+	end
+
+	local nameType, number = model.Name:match("^(%a+)_([0-9]+)$")
+
+	if not nameType then
+		return false
+	end
+
+	if not number then
+		return false
+	end
+
+	return allowedNames[nameType] == true
+end
+
+local function GetFolder()
+	local gameSystem = workspace:FindFirstChild("GameSystem")
+	if not gameSystem then return nil end
+
+	return gameSystem:FindFirstChild("InteractiveItem")
+end
+
+local function GetInteractablePart(model)
+	local part = model:FindFirstChild("Interactable", true)
+
+	if part and part:IsA("BasePart") then
+		return part
+	end
+
+	return nil
+end
+
+local function GetPrompt(model, part)
+	local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
+
+	if prompt then
+		return prompt
+	end
+
+	return model:FindFirstChildWhichIsA("ProximityPrompt", true)
+end
+
+local function SetupPrompt(prompt)
+	if not prompt then return end
+
+	pcall(function()
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+	end)
+
+	pcall(function()
+		prompt.RequiresLineOfSight = false
+	end)
+
+	pcall(function()
+		prompt.MaxActivationDistance = 30
+	end)
+
+	pcall(function()
+		prompt.Enabled = true
+	end)
+end
+
+local function GetTargets()
+	local folder = GetFolder()
+	local targets = {}
+
+	if not folder then
+		return targets
+	end
+
+	for _, model in ipairs(folder:GetChildren()) do
+		if IsValidModel(model) and not usedModels[model] then
+			local part = GetInteractablePart(model)
+
+			if part then
+				table.insert(targets, {
+					model = model,
+					part = part
+				})
+			end
+		end
+	end
+
+	table.sort(targets, function(a, b)
+		local root = GetRoot()
+		local da = (root.Position - a.part.Position).Magnitude
+		local db = (root.Position - b.part.Position).Magnitude
+		return da < db
+	end)
+
+	return targets
+end
+
+local function GetUnderCFrame(part)
+	local position = part.Position - Vector3.new(0, underOffset, 0)
+	return CFrame.lookAt(position, part.Position)
+end
+
+local function MoveToCFrame(targetCFrame)
+	local root = GetRoot()
+	local distance = (root.Position - targetCFrame.Position).Magnitude
+	local duration = math.clamp(distance / moveSpeed, 0.05, 1.5)
+
+	local tween = TweenService:Create(
+		root,
+		TweenInfo.new(duration, Enum.EasingStyle.Linear),
+		{CFrame = targetCFrame}
+	)
+
+	tween:Play()
+	tween.Completed:Wait()
+
+	root.CFrame = targetCFrame
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+end
+
+local function TriggerInteract(model, part)
+	local prompt = GetPrompt(model, part)
+	SetupPrompt(prompt)
+
+	if prompt then
+		local startTime = os.clock()
+
+		while autoFarmEnabled and not destroyed and os.clock() - startTime < interactTime do
+			pcall(function()
+				prompt:InputHoldBegin()
+			end)
+
+			task.wait(0.08)
+
+			pcall(function()
+				prompt:InputHoldEnd()
+			end)
+
+			task.wait(0.08)
+		end
+	else
+		task.wait(interactTime)
+	end
+end
+
+local function FarmOne(target)
+	if not target then return end
+	if not target.model then return end
+	if not target.part then return end
+	if not target.model.Parent then return end
+	if not target.part.Parent then return end
+
+	local model = target.model
+	local part = target.part
+
+	DisableCollisions()
+
+	MoveToCFrame(GetUnderCFrame(part))
+
+	currentTargetPart = part
+	FreezePlayer()
+
+	TriggerInteract(model, part)
+
+	task.wait(0.2)
+
+	if part and part.Parent then
+		part:Destroy()
+	end
+
+	usedModels[model] = true
+	currentTargetPart = nil
+	UnfreezePlayer()
+end
+
+local function GoToFinalPosition()
+	currentTargetPart = nil
+	UnfreezePlayer()
+	MoveToCFrame(CFrame.new(finalPosition))
+end
+
+local function StartFarm()
+	if farming then return end
+
+	farming = true
+
+	while autoFarmEnabled and not destroyed do
+		local targets = GetTargets()
+
+		if #targets == 0 then
+			GoToFinalPosition()
+			SetAutoFarm(false)
+			break
+		end
+
+		local target = targets[1]
+		FarmOne(target)
+
+		task.wait(0.15)
+	end
+
+	currentTargetPart = nil
+	UnfreezePlayer()
+	camera.CameraType = oldCameraType
+
+	farming = false
+end
+
+function SetAutoFarm(state)
 	autoFarmEnabled = state
 
 	if autoFarmEnabled then
 		toggleButton.Text = "Auto Farm : ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(40, 150, 70)
+
+		task.spawn(StartFarm)
 	else
 		toggleButton.Text = "Auto Farm : OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+
+		currentTargetPart = nil
+		UnfreezePlayer()
+		camera.CameraType = oldCameraType
 	end
-end
-
-local function ConnectFramePress(frameObject, callback)
-	if not frameObject then return end
-	if not frameObject:IsA("GuiObject") then return end
-
-	frameObject.Active = true
-
-	local connection = frameObject.InputBegan:Connect(function(input)
-		if destroyed then return end
-
-		if input.UserInputType == Enum.UserInputType.Touch then
-			callback()
-		end
-
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			callback()
-		end
-	end)
-
-	table.insert(connections, connection)
 end
 
 local function DestroyAll()
 	destroyed = true
 	autoFarmEnabled = false
+	currentTargetPart = nil
+
+	UnfreezePlayer()
+	camera.CameraType = oldCameraType
 
 	for _, connection in ipairs(connections) do
 		if connection then
@@ -124,6 +400,7 @@ table.insert(connections, toggleButton.Activated:Connect(function()
 end))
 
 table.insert(connections, closeButton.Activated:Connect(function()
+	if destroyed then return end
 	DestroyAll()
 end))
 
@@ -132,48 +409,33 @@ table.insert(connections, UserInputService.InputBegan:Connect(function(input, ga
 	if gameProcessed then return end
 
 	if input.KeyCode == Enum.KeyCode.E then
-		TriggerInteract()
-	end
+		local targets = GetTargets()
 
-	if input.KeyCode == Enum.KeyCode.G then
-		TriggerDrop()
+		if targets[1] then
+			TriggerInteract(targets[1].model, targets[1].part)
+		end
 	end
 end))
 
-task.spawn(function()
-	while not destroyed do
-		local touchGui = playerGui:FindFirstChild("Touch")
+table.insert(connections, RunService.RenderStepped:Connect(function()
+	if destroyed then return end
 
-		if touchGui then
-			local rightFrame = touchGui:FindFirstChild("Right")
-
-			if rightFrame then
-				local interactFrame = rightFrame:FindFirstChild("InteractButton")
-				local dropFrame = rightFrame:FindFirstChild("DropButton")
-
-				if interactFrame then
-					ConnectFramePress(interactFrame, TriggerInteract)
-				end
-
-				if dropFrame then
-					ConnectFramePress(dropFrame, TriggerDrop)
-				end
-
-				break
-			end
-		end
-
-		task.wait(0.25)
+	if autoFarmEnabled then
+		DisableCollisions()
 	end
-end)
 
-task.spawn(function()
-	while not destroyed do
-		if autoFarmEnabled then
-			TriggerInteract()
-			task.wait(0.15)
-		else
-			task.wait(0.25)
-		end
+	if currentTargetPart and currentTargetPart.Parent then
+		local root = GetRoot()
+		local lockCFrame = GetUnderCFrame(currentTargetPart)
+
+		root.CFrame = lockCFrame
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.AssemblyAngularVelocity = Vector3.zero
+
+		camera.CameraType = Enum.CameraType.Scriptable
+		camera.CFrame = CFrame.lookAt(
+			root.Position + Vector3.new(0, 1.5, 0),
+			currentTargetPart.Position + Vector3.new(0, 1, 0)
+		)
 	end
-end)
+end))
