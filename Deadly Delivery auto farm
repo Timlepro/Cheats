@@ -1,8 +1,12 @@
 --==================================================
--- CONFIG GÉNÉRALE
+-- DEBUG INTERACTION FINDER
 --==================================================
 
-local VERSION = "1.0.1"
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
 local contenants = {
 	"Cabinet",
@@ -12,321 +16,8 @@ local contenants = {
 	"Fridge"
 }
 
-local finalPosition = Vector3.new(-321.5, 323, 405.5)
-
-local moveSpeed = 700
-local underOffset = 2.2
-local waitBeforeInteract = 0.3
-
-local openSpamCount = 4
-local openSpamDelay = 0.08
-local waitOpenTimeout = 1.2
-local maxOpenTriesPerContainer = 5
-
-local remoteName = "Remote_event"
-
---==================================================
--- SERVICES
---==================================================
-
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ContextActionService = game:GetService("ContextActionService")
-
---==================================================
--- VARIABLES
---==================================================
-
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-local camera = workspace.CurrentCamera
-
-local destroyed = false
-local autoFarmEnabled = false
-local farming = false
-local currentTargetPart = nil
-local currentTargetModel = nil
-
-local connections = {}
-local failedAttempts = {}
-local skippedModels = {}
-
-local remoteEvent = nil
-
-local oldCameraType = camera.CameraType
-local oldWalkSpeed
-local oldJumpPower
-local oldJumpHeight
-local oldAutoRotate
-
---==================================================
--- INTERFACE
---==================================================
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AutoFarmUI"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 260, 0, 88)
-mainFrame.Position = UDim2.new(0.5, 0, 0.065, 0)
-mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Parent = screenGui
-
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 10)
-mainCorner.Parent = mainFrame
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0.72, 0, 0.5, 0)
-toggleButton.Position = UDim2.new(0.42, 0, 0.38, 0)
-toggleButton.AnchorPoint = Vector2.new(0.5, 0.5)
-toggleButton.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
-toggleButton.BorderSizePixel = 0
-toggleButton.Text = "Auto Farm : OFF"
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.TextScaled = true
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.Active = true
-toggleButton.Parent = mainFrame
-
-local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 8)
-toggleCorner.Parent = toggleButton
-
-local closeButton = Instance.new("TextButton")
-closeButton.Size = UDim2.new(0.18, 0, 0.5, 0)
-closeButton.Position = UDim2.new(0.88, 0, 0.38, 0)
-closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
-closeButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-closeButton.BorderSizePixel = 0
-closeButton.Text = "X"
-closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.TextScaled = true
-closeButton.Font = Enum.Font.GothamBold
-closeButton.Active = true
-closeButton.Parent = mainFrame
-
-local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 8)
-closeCorner.Parent = closeButton
-
-local versionLabel = Instance.new("TextLabel")
-versionLabel.Size = UDim2.new(1, -20, 0, 22)
-versionLabel.Position = UDim2.new(0.5, 0, 0.78, 0)
-versionLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-versionLabel.BackgroundTransparency = 1
-versionLabel.Text = "Version : " .. VERSION
-versionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-versionLabel.TextScaled = true
-versionLabel.Font = Enum.Font.GothamBold
-versionLabel.Parent = mainFrame
-
-local debugLabel = Instance.new("TextLabel")
-debugLabel.Size = UDim2.new(0, 380, 0, 155)
-debugLabel.Position = UDim2.new(1, -15, 0, 15)
-debugLabel.AnchorPoint = Vector2.new(1, 0)
-debugLabel.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
-debugLabel.BorderSizePixel = 0
-debugLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-debugLabel.TextSize = 15
-debugLabel.TextXAlignment = Enum.TextXAlignment.Left
-debugLabel.TextYAlignment = Enum.TextYAlignment.Top
-debugLabel.Font = Enum.Font.GothamBold
-debugLabel.Text = "Debug : attente"
-debugLabel.Parent = screenGui
-
-local debugCorner = Instance.new("UICorner")
-debugCorner.CornerRadius = UDim.new(0, 8)
-debugCorner.Parent = debugLabel
-
---==================================================
--- DEBUG
---==================================================
-
-local debugLines = {}
-
 local function Debug(message)
-	print("[AUTO FARM] " .. message)
-
-	table.insert(debugLines, 1, message)
-
-	while #debugLines > 8 do
-		table.remove(debugLines)
-	end
-
-	debugLabel.Text = "Debug :\n" .. table.concat(debugLines, "\n")
-end
-
---==================================================
--- JOUEUR
---==================================================
-
-local function GetCharacter()
-	return player.Character or player.CharacterAdded:Wait()
-end
-
-local function GetHumanoid()
-	return GetCharacter():WaitForChild("Humanoid")
-end
-
-local function GetRoot()
-	return GetCharacter():WaitForChild("HumanoidRootPart")
-end
-
-local function SaveMovement()
-	local humanoid = GetHumanoid()
-
-	if oldWalkSpeed == nil then
-		oldWalkSpeed = humanoid.WalkSpeed
-		oldJumpPower = humanoid.JumpPower
-		oldJumpHeight = humanoid.JumpHeight
-		oldAutoRotate = humanoid.AutoRotate
-	end
-end
-
-local function FreezePlayer()
-	local humanoid = GetHumanoid()
-	local root = GetRoot()
-
-	SaveMovement()
-
-	humanoid.WalkSpeed = 0
-	humanoid.JumpPower = 0
-	humanoid.JumpHeight = 0
-	humanoid.AutoRotate = false
-
-	root.AssemblyLinearVelocity = Vector3.zero
-	root.AssemblyAngularVelocity = Vector3.zero
-end
-
-local function UnfreezePlayer()
-	local humanoid = GetHumanoid()
-
-	if oldWalkSpeed ~= nil then
-		humanoid.WalkSpeed = oldWalkSpeed
-		humanoid.JumpPower = oldJumpPower
-		humanoid.JumpHeight = oldJumpHeight
-		humanoid.AutoRotate = oldAutoRotate
-	end
-
-	oldWalkSpeed = nil
-	oldJumpPower = nil
-	oldJumpHeight = nil
-	oldAutoRotate = nil
-end
-
-local function DisableCollisions()
-	local character = GetCharacter()
-
-	for _, object in ipairs(character:GetDescendants()) do
-		if object:IsA("BasePart") then
-			object.CanCollide = false
-		end
-	end
-end
-
---==================================================
--- REMOTE EVENT
---==================================================
-
-local function FindRemoteEvent()
-	local found = ReplicatedStorage:FindFirstChild(remoteName, true)
-
-	if found and found:IsA("RemoteEvent") then
-		remoteEvent = found
-		Debug("Remote trouvé : " .. found:GetFullName())
-		return found
-	end
-
-	Debug("Remote introuvable : " .. remoteName)
-	return nil
-end
-
-local function FireInteractRemote(model, part)
-	if not remoteEvent then
-		FindRemoteEvent()
-	end
-
-	if not remoteEvent then
-		return false
-	end
-
-	Debug("FireServer sur " .. model.Name)
-
-	local success, err = pcall(function()
-		--==================================================
-		-- À MODIFIER ICI SI TON REMOTE ATTEND AUTRE CHOSE
-		--==================================================
-
-		remoteEvent:FireServer(model)
-
-		-- Exemples possibles si le premier ne marche pas :
-		-- remoteEvent:FireServer(part)
-		-- remoteEvent:FireServer("Open", model)
-		-- remoteEvent:FireServer("Interact", model)
-		-- remoteEvent:FireServer(model, "Open")
-		-- remoteEvent:FireServer(part, "Open")
-	end)
-
-	if not success then
-		Debug("Erreur FireServer : " .. tostring(err))
-		return false
-	end
-
-	return true
-end
-
---==================================================
--- ACTION E PC + BOUTON MOBILE ROBLOX
---==================================================
-
-local function InteractAction(actionName, inputState, inputObject)
-	if inputState ~= Enum.UserInputState.Begin then return end
-	if destroyed then return end
-
-	if currentTargetModel and currentTargetPart then
-		Debug("Action Interact lancée")
-		FireInteractRemote(currentTargetModel, currentTargetPart)
-	else
-		Debug("Action Interact : aucune cible")
-	end
-end
-
-ContextActionService:BindAction(
-	"AutoFarmInteract",
-	InteractAction,
-	true,
-	Enum.KeyCode.E
-)
-
-ContextActionService:SetTitle("AutoFarmInteract", "E")
-ContextActionService:SetPosition("AutoFarmInteract", UDim2.new(0.82, 0, 0.62, 0))
-
---==================================================
--- RECHERCHE OBJETS
---==================================================
-
-local function GetFolder()
-	local gameSystem = workspace:FindFirstChild("GameSystem")
-	if not gameSystem then
-		Debug("GameSystem introuvable")
-		return nil
-	end
-
-	local folder = gameSystem:FindFirstChild("InteractiveItem")
-	if not folder then
-		Debug("InteractiveItem introuvable")
-		return nil
-	end
-
-	return folder
+	print("[FINDER] " .. tostring(message))
 end
 
 local function IsNameInList(name)
@@ -350,372 +41,99 @@ local function IsValidModel(model)
 	return IsNameInList(nameType)
 end
 
-local function GetInteractablePart(model)
-	local part = model:FindFirstChild("Interactable", true)
+local function GetFolder()
+	local gameSystem = workspace:FindFirstChild("GameSystem")
+	if not gameSystem then return nil end
 
-	if part and part:IsA("BasePart") then
-		return part
-	end
-
-	return nil
+	return gameSystem:FindFirstChild("InteractiveItem")
 end
 
-local function GetTargets()
+local function PrintObjectInfo(object, indent)
+	indent = indent or ""
+
+	Debug(indent .. object.ClassName .. " | " .. object.Name)
+
+	for _, child in ipairs(object:GetChildren()) do
+		if child:IsA("RemoteEvent") then
+			Debug(indent .. "  REMOTE EVENT -> " .. child:GetFullName())
+		elseif child:IsA("RemoteFunction") then
+			Debug(indent .. "  REMOTE FUNCTION -> " .. child:GetFullName())
+		elseif child:IsA("BindableEvent") then
+			Debug(indent .. "  BINDABLE EVENT -> " .. child:GetFullName())
+		elseif child:IsA("BindableFunction") then
+			Debug(indent .. "  BINDABLE FUNCTION -> " .. child:GetFullName())
+		elseif child:IsA("LocalScript") then
+			Debug(indent .. "  LOCAL SCRIPT -> " .. child:GetFullName())
+		elseif child:IsA("Script") then
+			Debug(indent .. "  SERVER SCRIPT -> " .. child:GetFullName())
+		elseif child:IsA("ModuleScript") then
+			Debug(indent .. "  MODULE SCRIPT -> " .. child:GetFullName())
+		elseif child:IsA("ClickDetector") then
+			Debug(indent .. "  CLICK DETECTOR -> " .. child:GetFullName())
+		elseif child:IsA("ProximityPrompt") then
+			Debug(indent .. "  PROXIMITY PROMPT -> " .. child:GetFullName())
+		end
+	end
+end
+
+local function ScanReplicatedStorage()
+	Debug("========== SCAN REPLICATED STORAGE ==========")
+
+	for _, object in ipairs(ReplicatedStorage:GetDescendants()) do
+		if object:IsA("RemoteEvent") then
+			Debug("RemoteEvent : " .. object:GetFullName())
+		elseif object:IsA("RemoteFunction") then
+			Debug("RemoteFunction : " .. object:GetFullName())
+		elseif object:IsA("ModuleScript") then
+			Debug("ModuleScript : " .. object:GetFullName())
+		end
+	end
+end
+
+local function ScanPlayerGui()
+	Debug("========== SCAN PLAYER GUI ==========")
+
+	for _, object in ipairs(playerGui:GetDescendants()) do
+		if object.Name:lower():find("interact") then
+			Debug("Interact GUI trouvé : " .. object.ClassName .. " | " .. object:GetFullName())
+		end
+
+		if object.Name:lower():find("touch") then
+			Debug("Touch GUI trouvé : " .. object.ClassName .. " | " .. object:GetFullName())
+		end
+
+		if object.Name:lower():find("button") then
+			Debug("Button GUI trouvé : " .. object.ClassName .. " | " .. object:GetFullName())
+		end
+	end
+end
+
+local function ScanContainers()
 	local folder = GetFolder()
-	local targets = {}
 
 	if not folder then
-		return targets
+		Debug("Folder InteractiveItem introuvable")
+		return
 	end
+
+	Debug("========== SCAN CONTENANTS ==========")
 
 	for _, model in ipairs(folder:GetChildren()) do
-		if IsValidModel(model) and not skippedModels[model] then
-			local isOpen = model:GetAttribute("Open")
+		if IsValidModel(model) then
+			Debug("Contenant : " .. model.Name)
+			Debug("Open attribute : " .. tostring(model:GetAttribute("Open")))
 
-			if isOpen == false then
-				local part = GetInteractablePart(model)
+			PrintObjectInfo(model, "  ")
 
-				if part then
-					table.insert(targets, {
-						model = model,
-						part = part
-					})
-				else
-					Debug(model.Name .. " ignoré : pas de Interactable")
-				end
-			end
+			model:GetAttributeChangedSignal("Open"):Connect(function()
+				Debug(model.Name .. " Open changé -> " .. tostring(model:GetAttribute("Open")))
+			end)
 		end
 	end
-
-	table.sort(targets, function(a, b)
-		local root = GetRoot()
-		return (root.Position - a.part.Position).Magnitude < (root.Position - b.part.Position).Magnitude
-	end)
-
-	return targets
 end
 
---==================================================
--- DÉPLACEMENT
---==================================================
-
-local function GetUnderCFrame(part)
-	local position = part.Position - Vector3.new(0, underOffset, 0)
-	return CFrame.lookAt(position, part.Position)
-end
-
-local function MoveToCFrame(targetCFrame)
-	local root = GetRoot()
-	local distance = (root.Position - targetCFrame.Position).Magnitude
-	local duration = math.clamp(distance / moveSpeed, 0.03, 0.8)
-
-	local tween = TweenService:Create(
-		root,
-		TweenInfo.new(duration, Enum.EasingStyle.Linear),
-		{ CFrame = targetCFrame }
-	)
-
-	tween:Play()
-	tween.Completed:Wait()
-
-	root.CFrame = targetCFrame
-	root.AssemblyLinearVelocity = Vector3.zero
-	root.AssemblyAngularVelocity = Vector3.zero
-end
-
-local function ForceTeleportTo(position, duration)
-	local character = GetCharacter()
-	local root = GetRoot()
-	local targetCFrame = CFrame.new(position)
-
-	local startTime = os.clock()
-
-	while not destroyed and os.clock() - startTime < duration do
-		character:PivotTo(targetCFrame)
-		root.CFrame = targetCFrame
-		root.AssemblyLinearVelocity = Vector3.zero
-		root.AssemblyAngularVelocity = Vector3.zero
-		task.wait()
-	end
-end
-
---==================================================
--- INTERACTION CONTENANT
---==================================================
-
-local function TriggerContainerInteraction(model, part)
-	task.wait(waitBeforeInteract)
-
-	for i = 1, openSpamCount do
-		if destroyed then return false end
-		if not autoFarmEnabled then return false end
-
-		if model:GetAttribute("Open") == true then
-			Debug(model.Name .. " déjà ouvert")
-			return true
-		end
-
-		Debug(model.Name .. " interaction " .. i)
-
-		FireInteractRemote(model, part)
-
-		task.wait(openSpamDelay)
-	end
-
-	return model:GetAttribute("Open") == true
-end
-
-local function WaitUntilOpen(model)
-	local startTime = os.clock()
-
-	while autoFarmEnabled and not destroyed and os.clock() - startTime < waitOpenTimeout do
-		if model:GetAttribute("Open") == true then
-			Debug(model.Name .. " Open = true")
-			return true
-		end
-
-		task.wait(0.03)
-	end
-
-	Debug(model.Name .. " Open toujours false")
-	return false
-end
-
---==================================================
--- ÉTAPE 1 : OUVRIR TOUS LES CONTENANTS
---==================================================
-
-local function Step1_OpenOneContainer(target)
-	if not target then return false end
-	if not target.model then return false end
-	if not target.part then return false end
-	if not target.model.Parent then return false end
-	if not target.part.Parent then return false end
-
-	local model = target.model
-	local part = target.part
-
-	Debug("Déplacement vers " .. model.Name)
-
-	DisableCollisions()
-	MoveToCFrame(GetUnderCFrame(part))
-
-	currentTargetModel = model
-	currentTargetPart = part
-
-	FreezePlayer()
-
-	Debug(model.Name .. " sous le contenant")
-
-	TriggerContainerInteraction(model, part)
-
-	local opened = WaitUntilOpen(model)
-
-	currentTargetModel = nil
-	currentTargetPart = nil
-
-	UnfreezePlayer()
-
-	if opened then
-		Debug(model.Name .. " terminé")
-		return true
-	end
-
-	failedAttempts[model] = (failedAttempts[model] or 0) + 1
-	Debug(model.Name .. " échec " .. failedAttempts[model] .. "/" .. maxOpenTriesPerContainer)
-
-	if failedAttempts[model] >= maxOpenTriesPerContainer then
-		skippedModels[model] = true
-		Debug(model.Name .. " skip")
-	end
-
-	return false
-end
-
-local function Step1_OpenAllContainers()
-	Debug("Étape 1 : ouvrir contenants")
-
-	while autoFarmEnabled and not destroyed do
-		local targets = GetTargets()
-
-		if #targets == 0 then
-			Debug("Étape 1 terminée")
-			return true
-		end
-
-		Step1_OpenOneContainer(targets[1])
-
-		task.wait(0.05)
-	end
-
-	return false
-end
-
---==================================================
--- ÉTAPE 2 : RÉCUPÉRER ET DÉPOSER
---==================================================
-
-local function Step2_CollectAndDrop()
-	Debug("Étape 2 non configurée")
-	return true
-end
-
---==================================================
--- ÉTAPE 3 : AMÉLIORER LES ITEMS
---==================================================
-
-local function Step3_UpgradeItems()
-	Debug("Étape 3 non configurée")
-	return true
-end
-
---==================================================
--- FIN
---==================================================
-
-local function GoToFinalPosition()
-	Debug("Téléport final")
-
-	currentTargetModel = nil
-	currentTargetPart = nil
-
-	UnfreezePlayer()
-	camera.CameraType = oldCameraType
-
-	ForceTeleportTo(finalPosition, 1)
-
-	Debug("Téléport final terminé")
-end
-
-local function StartFarm()
-	if farming then return end
-
-	farming = true
-
-	Debug("Auto farm lancé")
-
-	FindRemoteEvent()
-
-	local step1Done = Step1_OpenAllContainers()
-
-	if step1Done and autoFarmEnabled and not destroyed then
-		local step2Done = Step2_CollectAndDrop()
-
-		if step2Done and autoFarmEnabled and not destroyed then
-			local step3Done = Step3_UpgradeItems()
-
-			if step3Done and autoFarmEnabled and not destroyed then
-				GoToFinalPosition()
-			end
-		end
-	end
-
-	while autoFarmEnabled and not destroyed do
-		task.wait(0.5)
-	end
-
-	currentTargetModel = nil
-	currentTargetPart = nil
-
-	UnfreezePlayer()
-	camera.CameraType = oldCameraType
-
-	farming = false
-
-	Debug("Auto farm arrêté")
-end
-
---==================================================
--- ON / OFF
---==================================================
-
-local function SetAutoFarm(state)
-	autoFarmEnabled = state
-
-	if autoFarmEnabled then
-		toggleButton.Text = "Auto Farm : ON"
-		toggleButton.BackgroundColor3 = Color3.fromRGB(40, 150, 70)
-
-		Debug("ON")
-		task.spawn(StartFarm)
-	else
-		toggleButton.Text = "Auto Farm : OFF"
-		toggleButton.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
-
-		Debug("OFF")
-
-		currentTargetModel = nil
-		currentTargetPart = nil
-
-		UnfreezePlayer()
-		camera.CameraType = oldCameraType
-	end
-end
-
-local function DestroyAll()
-	destroyed = true
-	autoFarmEnabled = false
-
-	currentTargetModel = nil
-	currentTargetPart = nil
-
-	UnfreezePlayer()
-	camera.CameraType = oldCameraType
-
-	ContextActionService:UnbindAction("AutoFarmInteract")
-
-	for _, connection in ipairs(connections) do
-		if connection then
-			connection:Disconnect()
-		end
-	end
-
-	if screenGui then
-		screenGui:Destroy()
-	end
-
-	script:Destroy()
-end
-
---==================================================
--- CAMÉRA + NOCLIP
---==================================================
-
-table.insert(connections, RunService.RenderStepped:Connect(function()
-	if destroyed then return end
-
-	if autoFarmEnabled then
-		DisableCollisions()
-	end
-
-	if currentTargetPart and currentTargetPart.Parent then
-		local root = GetRoot()
-		local lockCFrame = GetUnderCFrame(currentTargetPart)
-
-		root.CFrame = lockCFrame
-		root.AssemblyLinearVelocity = Vector3.zero
-		root.AssemblyAngularVelocity = Vector3.zero
-
-		camera.CameraType = Enum.CameraType.Scriptable
-		camera.CFrame = CFrame.lookAt(
-			root.Position + Vector3.new(0, 1.5, 0),
-			currentTargetPart.Position + Vector3.new(0, 1, 0)
-		)
-	end
-end))
-
---==================================================
--- BOUTONS
---==================================================
-
-table.insert(connections, toggleButton.Activated:Connect(function()
-	if destroyed then return end
-	SetAutoFarm(not autoFarmEnabled)
-end))
-
-table.insert(connections, closeButton.Activated:Connect(function()
-	if destroyed then return end
-	DestroyAll()
-end))
-
-Debug("Script chargé - Version " .. VERSION)
+ScanReplicatedStorage()
+ScanPlayerGui()
+ScanContainers()
+
+Debug("Maintenant ouvre un contenant manuellement avec E et regarde les prints.")
