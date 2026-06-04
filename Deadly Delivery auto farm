@@ -2,7 +2,7 @@
 -- CONFIG GÉNÉRALE
 --==================================================
 
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 
 local contenants = {
 	"Cabinet",
@@ -18,11 +18,12 @@ local moveSpeed = 700
 local underOffset = 2.2
 local waitBeforeInteract = 0.3
 
-local openSpamCount = 8
-local openSpamDelay = 0.04
+local openSpamCount = 4
+local openSpamDelay = 0.08
 local waitOpenTimeout = 1.2
-
 local maxOpenTriesPerContainer = 5
+
+local remoteName = "Remote_event"
 
 --==================================================
 -- SERVICES
@@ -31,6 +32,8 @@ local maxOpenTriesPerContainer = 5
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ContextActionService = game:GetService("ContextActionService")
 
 --==================================================
 -- VARIABLES
@@ -44,10 +47,13 @@ local destroyed = false
 local autoFarmEnabled = false
 local farming = false
 local currentTargetPart = nil
+local currentTargetModel = nil
 
 local connections = {}
 local failedAttempts = {}
 local skippedModels = {}
+
+local remoteEvent = nil
 
 local oldCameraType = camera.CameraType
 local oldWalkSpeed
@@ -123,13 +129,12 @@ versionLabel.Font = Enum.Font.GothamBold
 versionLabel.Parent = mainFrame
 
 local debugLabel = Instance.new("TextLabel")
-debugLabel.Size = UDim2.new(0, 360, 0, 140)
+debugLabel.Size = UDim2.new(0, 380, 0, 155)
 debugLabel.Position = UDim2.new(1, -15, 0, 15)
 debugLabel.AnchorPoint = Vector2.new(1, 0)
 debugLabel.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
 debugLabel.BorderSizePixel = 0
 debugLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-debugLabel.TextScaled = false
 debugLabel.TextSize = 15
 debugLabel.TextXAlignment = Enum.TextXAlignment.Left
 debugLabel.TextYAlignment = Enum.TextYAlignment.Top
@@ -145,18 +150,18 @@ debugCorner.Parent = debugLabel
 -- DEBUG
 --==================================================
 
-local lastDebugLines = {}
+local debugLines = {}
 
 local function Debug(message)
 	print("[AUTO FARM] " .. message)
 
-	table.insert(lastDebugLines, 1, message)
+	table.insert(debugLines, 1, message)
 
-	while #lastDebugLines > 7 do
-		table.remove(lastDebugLines)
+	while #debugLines > 8 do
+		table.remove(debugLines)
 	end
 
-	debugLabel.Text = "Debug :\n" .. table.concat(lastDebugLines, "\n")
+	debugLabel.Text = "Debug :\n" .. table.concat(debugLines, "\n")
 end
 
 --==================================================
@@ -228,6 +233,83 @@ local function DisableCollisions()
 end
 
 --==================================================
+-- REMOTE EVENT
+--==================================================
+
+local function FindRemoteEvent()
+	local found = ReplicatedStorage:FindFirstChild(remoteName, true)
+
+	if found and found:IsA("RemoteEvent") then
+		remoteEvent = found
+		Debug("Remote trouvé : " .. found:GetFullName())
+		return found
+	end
+
+	Debug("Remote introuvable : " .. remoteName)
+	return nil
+end
+
+local function FireInteractRemote(model, part)
+	if not remoteEvent then
+		FindRemoteEvent()
+	end
+
+	if not remoteEvent then
+		return false
+	end
+
+	Debug("FireServer sur " .. model.Name)
+
+	local success, err = pcall(function()
+		--==================================================
+		-- À MODIFIER ICI SI TON REMOTE ATTEND AUTRE CHOSE
+		--==================================================
+
+		remoteEvent:FireServer(model)
+
+		-- Exemples possibles si le premier ne marche pas :
+		-- remoteEvent:FireServer(part)
+		-- remoteEvent:FireServer("Open", model)
+		-- remoteEvent:FireServer("Interact", model)
+		-- remoteEvent:FireServer(model, "Open")
+		-- remoteEvent:FireServer(part, "Open")
+	end)
+
+	if not success then
+		Debug("Erreur FireServer : " .. tostring(err))
+		return false
+	end
+
+	return true
+end
+
+--==================================================
+-- ACTION E PC + BOUTON MOBILE ROBLOX
+--==================================================
+
+local function InteractAction(actionName, inputState, inputObject)
+	if inputState ~= Enum.UserInputState.Begin then return end
+	if destroyed then return end
+
+	if currentTargetModel and currentTargetPart then
+		Debug("Action Interact lancée")
+		FireInteractRemote(currentTargetModel, currentTargetPart)
+	else
+		Debug("Action Interact : aucune cible")
+	end
+end
+
+ContextActionService:BindAction(
+	"AutoFarmInteract",
+	InteractAction,
+	true,
+	Enum.KeyCode.E
+)
+
+ContextActionService:SetTitle("AutoFarmInteract", "E")
+ContextActionService:SetPosition("AutoFarmInteract", UDim2.new(0.82, 0, 0.62, 0))
+
+--==================================================
 -- RECHERCHE OBJETS
 --==================================================
 
@@ -278,40 +360,6 @@ local function GetInteractablePart(model)
 	return nil
 end
 
-local function GetPrompt(model, part)
-	local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
-
-	if prompt then
-		return prompt
-	end
-
-	return model:FindFirstChildWhichIsA("ProximityPrompt", true)
-end
-
-local function SetupPrompt(prompt)
-	if not prompt then return end
-
-	pcall(function()
-		prompt.KeyboardKeyCode = Enum.KeyCode.E
-	end)
-
-	pcall(function()
-		prompt.RequiresLineOfSight = false
-	end)
-
-	pcall(function()
-		prompt.MaxActivationDistance = 80
-	end)
-
-	pcall(function()
-		prompt.HoldDuration = 0
-	end)
-
-	pcall(function()
-		prompt.Enabled = true
-	end)
-end
-
 local function GetTargets()
 	local folder = GetFolder()
 	local targets = {}
@@ -333,7 +381,7 @@ local function GetTargets()
 						part = part
 					})
 				else
-					Debug(model.Name .. " ignoré : pas de Part Interactable")
+					Debug(model.Name .. " ignoré : pas de Interactable")
 				end
 			end
 		end
@@ -378,9 +426,9 @@ end
 local function ForceTeleportTo(position, duration)
 	local character = GetCharacter()
 	local root = GetRoot()
+	local targetCFrame = CFrame.new(position)
 
 	local startTime = os.clock()
-	local targetCFrame = CFrame.new(position)
 
 	while not destroyed and os.clock() - startTime < duration do
 		character:PivotTo(targetCFrame)
@@ -392,20 +440,10 @@ local function ForceTeleportTo(position, duration)
 end
 
 --==================================================
--- INTERACTION PROPRE
+-- INTERACTION CONTENANT
 --==================================================
 
-local function TryPromptInteraction(model, part)
-	local prompt = GetPrompt(model, part)
-	SetupPrompt(prompt)
-
-	if not prompt then
-		Debug(model.Name .. " : aucun ProximityPrompt trouvé")
-		return false
-	end
-
-	Debug(model.Name .. " : ProximityPrompt trouvé")
-
+local function TriggerContainerInteraction(model, part)
 	task.wait(waitBeforeInteract)
 
 	for i = 1, openSpamCount do
@@ -413,21 +451,13 @@ local function TryPromptInteraction(model, part)
 		if not autoFarmEnabled then return false end
 
 		if model:GetAttribute("Open") == true then
-			Debug(model.Name .. " : déjà ouvert")
+			Debug(model.Name .. " déjà ouvert")
 			return true
 		end
 
-		Debug(model.Name .. " : interaction tentative " .. i)
+		Debug(model.Name .. " interaction " .. i)
 
-		pcall(function()
-			prompt:InputHoldBegin()
-		end)
-
-		task.wait(openSpamDelay)
-
-		pcall(function()
-			prompt:InputHoldEnd()
-		end)
+		FireInteractRemote(model, part)
 
 		task.wait(openSpamDelay)
 	end
@@ -440,14 +470,14 @@ local function WaitUntilOpen(model)
 
 	while autoFarmEnabled and not destroyed and os.clock() - startTime < waitOpenTimeout do
 		if model:GetAttribute("Open") == true then
-			Debug(model.Name .. " : Open = true")
+			Debug(model.Name .. " Open = true")
 			return true
 		end
 
 		task.wait(0.03)
 	end
 
-	Debug(model.Name .. " : Open toujours false")
+	Debug(model.Name .. " Open toujours false")
 	return false
 end
 
@@ -470,35 +500,40 @@ local function Step1_OpenOneContainer(target)
 	DisableCollisions()
 	MoveToCFrame(GetUnderCFrame(part))
 
+	currentTargetModel = model
 	currentTargetPart = part
+
 	FreezePlayer()
 
-	Debug(model.Name .. " : attente 0.3s sous le contenant")
+	Debug(model.Name .. " sous le contenant")
 
-	local interacted = TryPromptInteraction(model, part)
+	TriggerContainerInteraction(model, part)
+
 	local opened = WaitUntilOpen(model)
 
+	currentTargetModel = nil
 	currentTargetPart = nil
+
 	UnfreezePlayer()
 
 	if opened then
-		Debug(model.Name .. " : terminé")
+		Debug(model.Name .. " terminé")
 		return true
 	end
 
 	failedAttempts[model] = (failedAttempts[model] or 0) + 1
-	Debug(model.Name .. " : échec " .. failedAttempts[model] .. "/" .. maxOpenTriesPerContainer)
+	Debug(model.Name .. " échec " .. failedAttempts[model] .. "/" .. maxOpenTriesPerContainer)
 
 	if failedAttempts[model] >= maxOpenTriesPerContainer then
 		skippedModels[model] = true
-		Debug(model.Name .. " : skip après trop d'échecs")
+		Debug(model.Name .. " skip")
 	end
 
 	return false
 end
 
 local function Step1_OpenAllContainers()
-	Debug("Étape 1 : ouverture des contenants")
+	Debug("Étape 1 : ouvrir contenants")
 
 	while autoFarmEnabled and not destroyed do
 		local targets = GetTargets()
@@ -521,7 +556,7 @@ end
 --==================================================
 
 local function Step2_CollectAndDrop()
-	Debug("Étape 2 : pas encore configurée")
+	Debug("Étape 2 non configurée")
 	return true
 end
 
@@ -530,7 +565,7 @@ end
 --==================================================
 
 local function Step3_UpgradeItems()
-	Debug("Étape 3 : pas encore configurée")
+	Debug("Étape 3 non configurée")
 	return true
 end
 
@@ -539,13 +574,15 @@ end
 --==================================================
 
 local function GoToFinalPosition()
-	Debug("Téléport final vers les coordonnées")
+	Debug("Téléport final")
 
+	currentTargetModel = nil
 	currentTargetPart = nil
+
 	UnfreezePlayer()
 	camera.CameraType = oldCameraType
 
-	ForceTeleportTo(finalPosition, 0.8)
+	ForceTeleportTo(finalPosition, 1)
 
 	Debug("Téléport final terminé")
 end
@@ -556,6 +593,8 @@ local function StartFarm()
 	farming = true
 
 	Debug("Auto farm lancé")
+
+	FindRemoteEvent()
 
 	local step1Done = Step1_OpenAllContainers()
 
@@ -575,7 +614,9 @@ local function StartFarm()
 		task.wait(0.5)
 	end
 
+	currentTargetModel = nil
 	currentTargetPart = nil
+
 	UnfreezePlayer()
 	camera.CameraType = oldCameraType
 
@@ -603,7 +644,9 @@ local function SetAutoFarm(state)
 
 		Debug("OFF")
 
+		currentTargetModel = nil
 		currentTargetPart = nil
+
 		UnfreezePlayer()
 		camera.CameraType = oldCameraType
 	end
@@ -612,10 +655,14 @@ end
 local function DestroyAll()
 	destroyed = true
 	autoFarmEnabled = false
+
+	currentTargetModel = nil
 	currentTargetPart = nil
 
 	UnfreezePlayer()
 	camera.CameraType = oldCameraType
+
+	ContextActionService:UnbindAction("AutoFarmInteract")
 
 	for _, connection in ipairs(connections) do
 		if connection then
