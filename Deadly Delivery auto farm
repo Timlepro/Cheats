@@ -1,3 +1,7 @@
+--==================================================
+-- GÉNÉRAL
+--==================================================
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -10,18 +14,24 @@ local destroyed = false
 local autoFarmEnabled = false
 local farming = false
 local currentTargetPart = nil
+local hasGoneToFinalPosition = false
+
 local connections = {}
 
 local moveSpeed = 700
 local underOffset = 2.2
-local finalPosition = Vector3.new(-321.5, 328, 405.5)
+local waitBeforeInteract = 0.3
+local openSpamCount = 6
+local openSpamDelay = 0.04
 
-local allowedNames = {
-	Cabinet = true,
-	Crate = true,
-	OilBucket = true,
-	SoilMound = true,
-	Fridge = true
+local finalPosition = Vector3.new(-321.5, 323, 405.5)
+
+local contenants = {
+	"Cabinet",
+	"Crate",
+	"OilBucket",
+	"SoilMound",
+	"Fridge"
 }
 
 local oldCameraType = camera.CameraType
@@ -29,6 +39,10 @@ local oldWalkSpeed
 local oldJumpPower
 local oldJumpHeight
 local oldAutoRotate
+
+--==================================================
+-- INTERFACE
+--==================================================
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AutoFarmUI"
@@ -81,6 +95,10 @@ closeButton.Parent = mainFrame
 local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(0, 8)
 closeCorner.Parent = closeButton
+
+--==================================================
+-- JOUEUR
+--==================================================
 
 local function GetCharacter()
 	return player.Character or player.CharacterAdded:Wait()
@@ -146,11 +164,25 @@ local function DisableCollisions()
 	end
 end
 
+--==================================================
+-- RECHERCHE DES OBJETS
+--==================================================
+
 local function GetFolder()
 	local gameSystem = workspace:FindFirstChild("GameSystem")
 	if not gameSystem then return nil end
 
 	return gameSystem:FindFirstChild("InteractiveItem")
+end
+
+local function IsNameInList(name)
+	for _, validName in ipairs(contenants) do
+		if name == validName then
+			return true
+		end
+	end
+
+	return false
 end
 
 local function IsValidModel(model)
@@ -161,7 +193,7 @@ local function IsValidModel(model)
 	if not nameType then return false end
 	if not number then return false end
 
-	return allowedNames[nameType] == true
+	return IsNameInList(nameType)
 end
 
 local function GetInteractablePart(model)
@@ -241,6 +273,10 @@ local function GetTargets()
 	return targets
 end
 
+--==================================================
+-- DÉPLACEMENT
+--==================================================
+
 local function GetUnderCFrame(part)
 	local position = part.Position - Vector3.new(0, underOffset, 0)
 	return CFrame.lookAt(position, part.Position)
@@ -265,16 +301,22 @@ local function MoveToCFrame(targetCFrame)
 	root.AssemblyAngularVelocity = Vector3.zero
 end
 
+--==================================================
+-- ÉTAPE 1 : OUVRIR TOUS LES CONTENANTS
+--==================================================
+
 local function OpenContainer(model, part)
 	local prompt = GetPrompt(model, part)
 	SetupPrompt(prompt)
 
 	if not prompt then
-		task.wait(0.05)
+		task.wait(0.1)
 		return
 	end
 
-	for i = 1, 5 do
+	task.wait(waitBeforeInteract)
+
+	for i = 1, openSpamCount do
 		if destroyed then return end
 		if not autoFarmEnabled then return end
 		if model:GetAttribute("Open") == true then return end
@@ -283,20 +325,20 @@ local function OpenContainer(model, part)
 			prompt:InputHoldBegin()
 		end)
 
-		task.wait(0.035)
+		task.wait(openSpamDelay)
 
 		pcall(function()
 			prompt:InputHoldEnd()
 		end)
 
-		task.wait(0.035)
+		task.wait(openSpamDelay)
 	end
 end
 
-local function WaitOpen(model)
+local function WaitUntilOpen(model)
 	local startTime = os.clock()
 
-	while autoFarmEnabled and not destroyed and os.clock() - startTime < 0.5 do
+	while autoFarmEnabled and not destroyed and os.clock() - startTime < 1 do
 		if model:GetAttribute("Open") == true then
 			return true
 		end
@@ -307,7 +349,7 @@ local function WaitOpen(model)
 	return model:GetAttribute("Open") == true
 end
 
-local function FarmOne(target)
+local function OpenOneContainer(target)
 	if not target then return end
 	if not target.model then return end
 	if not target.part then return end
@@ -323,19 +365,39 @@ local function FarmOne(target)
 	currentTargetPart = part
 	FreezePlayer()
 
-	task.wait(0.03)
-
 	OpenContainer(model, part)
-	WaitOpen(model)
-
-	task.wait(0.03)
+	WaitUntilOpen(model)
 
 	currentTargetPart = nil
 	UnfreezePlayer()
 end
 
+local function StepOne_OpenAllContainers()
+	while autoFarmEnabled and not destroyed do
+		local targets = GetTargets()
+
+		if #targets == 0 then
+			return true
+		end
+
+		OpenOneContainer(targets[1])
+
+		task.wait(0.03)
+	end
+
+	return false
+end
+
+--==================================================
+-- FIN
+--==================================================
+
 local function GoToFinalPosition()
+	if hasGoneToFinalPosition then return end
+
+	hasGoneToFinalPosition = true
 	currentTargetPart = nil
+
 	UnfreezePlayer()
 	MoveToCFrame(CFrame.new(finalPosition))
 end
@@ -344,25 +406,28 @@ local function StartFarm()
 	if farming then return end
 
 	farming = true
+	hasGoneToFinalPosition = false
 
 	while autoFarmEnabled and not destroyed do
-		local targets = GetTargets()
+		local stepOneFinished = StepOne_OpenAllContainers()
 
-		if #targets > 0 then
-			FarmOne(targets[1])
-		else
+		if stepOneFinished then
 			GoToFinalPosition()
-			task.wait(0.5)
 		end
 
-		task.wait(0.03)
+		task.wait(0.5)
 	end
 
 	currentTargetPart = nil
 	UnfreezePlayer()
 	camera.CameraType = oldCameraType
+
 	farming = false
 end
+
+--==================================================
+-- ON / OFF
+--==================================================
 
 local function SetAutoFarm(state)
 	autoFarmEnabled = state
@@ -370,10 +435,12 @@ local function SetAutoFarm(state)
 	if autoFarmEnabled then
 		toggleButton.Text = "Auto Farm : ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(40, 150, 70)
+
 		task.spawn(StartFarm)
 	else
 		toggleButton.Text = "Auto Farm : OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+
 		currentTargetPart = nil
 		UnfreezePlayer()
 		camera.CameraType = oldCameraType
@@ -401,15 +468,9 @@ local function DestroyAll()
 	script:Destroy()
 end
 
-table.insert(connections, toggleButton.Activated:Connect(function()
-	if destroyed then return end
-	SetAutoFarm(not autoFarmEnabled)
-end))
-
-table.insert(connections, closeButton.Activated:Connect(function()
-	if destroyed then return end
-	DestroyAll()
-end))
+--==================================================
+-- CAMÉRA + NOCLIP
+--==================================================
 
 table.insert(connections, RunService.RenderStepped:Connect(function()
 	if destroyed then return end
@@ -432,4 +493,18 @@ table.insert(connections, RunService.RenderStepped:Connect(function()
 			currentTargetPart.Position + Vector3.new(0, 1, 0)
 		)
 	end
+end))
+
+--==================================================
+-- BOUTONS
+--==================================================
+
+table.insert(connections, toggleButton.Activated:Connect(function()
+	if destroyed then return end
+	SetAutoFarm(not autoFarmEnabled)
+end))
+
+table.insert(connections, closeButton.Activated:Connect(function()
+	if destroyed then return end
+	DestroyAll()
 end))
