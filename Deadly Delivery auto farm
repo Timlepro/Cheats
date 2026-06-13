@@ -2,7 +2,9 @@
 -- CONFIG GÉNÉRALE
 --==================================================
 
-local VERSION = "1.0.0"
+local VERSION = "1.2.0"
+
+local REMOTE_NAME = "Remote_Event"
 
 local contenants = {
 	"Cabinet",
@@ -16,13 +18,14 @@ local finalPosition = Vector3.new(-321.5, 323, 405.5)
 
 local moveSpeed = 700
 local underOffset = 2.2
-local waitBeforeInteract = 0.3
 
 local openSpamCount = 8
-local openSpamDelay = 0.04
+local openSpamDelay = 0.05
 local waitOpenTimeout = 1.2
 
 local maxOpenTriesPerContainer = 5
+
+local clickBuffer = "[Buffer Data: 7 bytes]"
 
 --==================================================
 -- SERVICES
@@ -31,6 +34,7 @@ local maxOpenTriesPerContainer = 5
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 --==================================================
 -- VARIABLES
@@ -40,9 +44,13 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
 
+local remoteEvent = ReplicatedStorage:WaitForChild(REMOTE_NAME)
+
 local destroyed = false
 local autoFarmEnabled = false
 local farming = false
+
+local currentTargetModel = nil
 local currentTargetPart = nil
 
 local connections = {}
@@ -65,8 +73,8 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 260, 0, 88)
-mainFrame.Position = UDim2.new(0.5, 0, 0.065, 0)
+mainFrame.Size = UDim2.new(0, 280, 0, 96)
+mainFrame.Position = UDim2.new(0.5, 0, 0.075, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.BackgroundColor3 = Color3.fromRGB(33, 33, 33)
 mainFrame.BorderSizePixel = 0
@@ -74,12 +82,12 @@ mainFrame.Active = true
 mainFrame.Parent = screenGui
 
 local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.CornerRadius = UDim.new(1, 0)
 mainCorner.Parent = mainFrame
 
 local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0.72, 0, 0.5, 0)
-toggleButton.Position = UDim2.new(0.42, 0, 0.38, 0)
+toggleButton.Size = UDim2.new(0.68, 0, 0.48, 0)
+toggleButton.Position = UDim2.new(0.4, 0, 0.38, 0)
 toggleButton.AnchorPoint = Vector2.new(0.5, 0.5)
 toggleButton.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
 toggleButton.BorderSizePixel = 0
@@ -91,12 +99,12 @@ toggleButton.Active = true
 toggleButton.Parent = mainFrame
 
 local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 8)
+toggleCorner.CornerRadius = UDim.new(1, 0)
 toggleCorner.Parent = toggleButton
 
 local closeButton = Instance.new("TextButton")
-closeButton.Size = UDim2.new(0.18, 0, 0.5, 0)
-closeButton.Position = UDim2.new(0.88, 0, 0.38, 0)
+closeButton.Size = UDim2.new(0.18, 0, 0.48, 0)
+closeButton.Position = UDim2.new(0.84, 0, 0.38, 0)
 closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
 closeButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
 closeButton.BorderSizePixel = 0
@@ -108,7 +116,7 @@ closeButton.Active = true
 closeButton.Parent = mainFrame
 
 local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.CornerRadius = UDim.new(1, 0)
 closeCorner.Parent = closeButton
 
 local versionLabel = Instance.new("TextLabel")
@@ -123,7 +131,7 @@ versionLabel.Font = Enum.Font.GothamBold
 versionLabel.Parent = mainFrame
 
 local debugLabel = Instance.new("TextLabel")
-debugLabel.Size = UDim2.new(0, 360, 0, 140)
+debugLabel.Size = UDim2.new(0, 380, 0, 150)
 debugLabel.Position = UDim2.new(1, -15, 0, 15)
 debugLabel.AnchorPoint = Vector2.new(1, 0)
 debugLabel.BackgroundColor3 = Color3.fromRGB(24, 24, 24)
@@ -138,7 +146,7 @@ debugLabel.Text = "Debug : attente"
 debugLabel.Parent = screenGui
 
 local debugCorner = Instance.new("UICorner")
-debugCorner.CornerRadius = UDim.new(0, 8)
+debugCorner.CornerRadius = UDim.new(0, 14)
 debugCorner.Parent = debugLabel
 
 --==================================================
@@ -152,7 +160,7 @@ local function Debug(message)
 
 	table.insert(lastDebugLines, 1, message)
 
-	while #lastDebugLines > 7 do
+	while #lastDebugLines > 8 do
 		table.remove(lastDebugLines)
 	end
 
@@ -233,12 +241,14 @@ end
 
 local function GetFolder()
 	local gameSystem = workspace:FindFirstChild("GameSystem")
+
 	if not gameSystem then
 		Debug("GameSystem introuvable")
 		return nil
 	end
 
 	local folder = gameSystem:FindFirstChild("InteractiveItem")
+
 	if not folder then
 		Debug("InteractiveItem introuvable")
 		return nil
@@ -258,12 +268,19 @@ local function IsNameInList(name)
 end
 
 local function IsValidModel(model)
-	if not model:IsA("Model") then return false end
+	if not model:IsA("Model") then
+		return false
+	end
 
 	local nameType, number = model.Name:match("^(%a+)_([0-9]+)$")
 
-	if not nameType then return false end
-	if not number then return false end
+	if not nameType then
+		return false
+	end
+
+	if not number then
+		return false
+	end
 
 	return IsNameInList(nameType)
 end
@@ -276,40 +293,6 @@ local function GetInteractablePart(model)
 	end
 
 	return nil
-end
-
-local function GetPrompt(model, part)
-	local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
-
-	if prompt then
-		return prompt
-	end
-
-	return model:FindFirstChildWhichIsA("ProximityPrompt", true)
-end
-
-local function SetupPrompt(prompt)
-	if not prompt then return end
-
-	pcall(function()
-		prompt.KeyboardKeyCode = Enum.KeyCode.E
-	end)
-
-	pcall(function()
-		prompt.RequiresLineOfSight = false
-	end)
-
-	pcall(function()
-		prompt.MaxActivationDistance = 80
-	end)
-
-	pcall(function()
-		prompt.HoldDuration = 0
-	end)
-
-	pcall(function()
-		prompt.Enabled = true
-	end)
 end
 
 local function GetTargets()
@@ -330,7 +313,7 @@ local function GetTargets()
 				if part then
 					table.insert(targets, {
 						model = model,
-						part = part
+						part = part,
 					})
 				else
 					Debug(model.Name .. " ignoré : pas de Part Interactable")
@@ -392,47 +375,38 @@ local function ForceTeleportTo(position, duration)
 end
 
 --==================================================
--- INTERACTION PROPRE
+-- INTERACTION REMOTE_EVENT
 --==================================================
 
-local function TryPromptInteraction(model, part)
-	local prompt = GetPrompt(model, part)
-	SetupPrompt(prompt)
-
-	if not prompt then
-		Debug(model.Name .. " : aucun ProximityPrompt trouvé")
+local function ClickContainer(model)
+	if not model then
 		return false
 	end
 
-	Debug(model.Name .. " : ProximityPrompt trouvé")
-
-	task.wait(waitBeforeInteract)
-
-	for i = 1, openSpamCount do
-		if destroyed then return false end
-		if not autoFarmEnabled then return false end
-
-		if model:GetAttribute("Open") == true then
-			Debug(model.Name .. " : déjà ouvert")
-			return true
-		end
-
-		Debug(model.Name .. " : interaction tentative " .. i)
-
-		pcall(function()
-			prompt:InputHoldBegin()
-		end)
-
-		task.wait(openSpamDelay)
-
-		pcall(function()
-			prompt:InputHoldEnd()
-		end)
-
-		task.wait(openSpamDelay)
+	if not model.Parent then
+		return false
 	end
 
-	return model:GetAttribute("Open") == true
+	local args = {
+		clickBuffer,
+		{
+			model,
+		},
+	}
+
+	local success, err = pcall(function()
+		remoteEvent:FireServer(table.unpack(args))
+	end)
+
+	if not success then
+		Debug(model.Name .. " : erreur Remote_Event")
+		warn(err)
+		return false
+	end
+
+	Debug(model.Name .. " : Remote_Event envoyé")
+
+	return true
 end
 
 local function WaitUntilOpen(model)
@@ -451,16 +425,61 @@ local function WaitUntilOpen(model)
 	return false
 end
 
+local function TryOpenContainer(model)
+	if not model then
+		return false
+	end
+
+	Debug(model.Name .. " : ouverture demandée")
+
+	for i = 1, openSpamCount do
+		if destroyed then
+			return false
+		end
+
+		if not autoFarmEnabled then
+			return false
+		end
+
+		if model:GetAttribute("Open") == true then
+			Debug(model.Name .. " : déjà ouvert")
+			return true
+		end
+
+		Debug(model.Name .. " : tentative " .. i .. "/" .. openSpamCount)
+
+		ClickContainer(model)
+
+		task.wait(openSpamDelay)
+	end
+
+	return WaitUntilOpen(model)
+end
+
 --==================================================
 -- ÉTAPE 1 : OUVRIR UN CONTENANT
 --==================================================
 
 local function Step1_OpenOneContainer(target)
-	if not target then return false end
-	if not target.model then return false end
-	if not target.part then return false end
-	if not target.model.Parent then return false end
-	if not target.part.Parent then return false end
+	if not target then
+		return false
+	end
+
+	if not target.model then
+		return false
+	end
+
+	if not target.part then
+		return false
+	end
+
+	if not target.model.Parent then
+		return false
+	end
+
+	if not target.part.Parent then
+		return false
+	end
 
 	local model = target.model
 	local part = target.part
@@ -475,37 +494,50 @@ local function Step1_OpenOneContainer(target)
 
 	FreezePlayer()
 
-	Debug(model.Name .. " : appuie sur E ou Interact")
-
-	local startTime = os.clock()
-
-	while autoFarmEnabled and not destroyed do
-		if model:GetAttribute("Open") == true then
-			Debug(model.Name .. " : ouvert")
-			currentTargetModel = nil
-			currentTargetPart = nil
-			UnfreezePlayer()
-			return true
-		end
-
-		if os.clock() - startTime > 8 then
-			Debug(model.Name .. " : délai dépassé")
-			break
-		end
-
-		task.wait(0.05)
-	end
+	local opened = TryOpenContainer(model)
 
 	currentTargetModel = nil
 	currentTargetPart = nil
+
 	UnfreezePlayer()
 
+	if opened then
+		Debug(model.Name .. " : ouvert")
+		return true
+	end
+
 	failedAttempts[model] = (failedAttempts[model] or 0) + 1
+
 	Debug(model.Name .. " : échec " .. failedAttempts[model] .. "/" .. maxOpenTriesPerContainer)
 
 	if failedAttempts[model] >= maxOpenTriesPerContainer then
 		skippedModels[model] = true
 		Debug(model.Name .. " : skip")
+	end
+
+	return false
+end
+
+local function Step1_OpenAllContainers()
+	Debug("Étape 1 : ouverture des contenants")
+
+	while autoFarmEnabled and not destroyed do
+		local targets = GetTargets()
+
+		if #targets == 0 then
+			Debug("Étape 1 terminée")
+			return true
+		end
+
+		local target = targets[1]
+
+		if target and target.model then
+			Step1_OpenOneContainer(target)
+		else
+			task.wait(0.1)
+		end
+
+		task.wait(0.1)
 	end
 
 	return false
@@ -536,7 +568,9 @@ end
 local function GoToFinalPosition()
 	Debug("Téléport final vers les coordonnées")
 
+	currentTargetModel = nil
 	currentTargetPart = nil
+
 	UnfreezePlayer()
 	camera.CameraType = oldCameraType
 
@@ -546,7 +580,9 @@ local function GoToFinalPosition()
 end
 
 local function StartFarm()
-	if farming then return end
+	if farming then
+		return
+	end
 
 	farming = true
 
@@ -570,7 +606,9 @@ local function StartFarm()
 		task.wait(0.5)
 	end
 
+	currentTargetModel = nil
 	currentTargetPart = nil
+
 	UnfreezePlayer()
 	camera.CameraType = oldCameraType
 
@@ -583,22 +621,30 @@ end
 -- ON / OFF
 --==================================================
 
-local function SetAutoFarm(state)
-	autoFarmEnabled = state
-
+local function RefreshButton()
 	if autoFarmEnabled then
 		toggleButton.Text = "Auto Farm : ON"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(40, 150, 70)
-
-		Debug("ON")
-		task.spawn(StartFarm)
 	else
 		toggleButton.Text = "Auto Farm : OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+	end
+end
 
+local function SetAutoFarm(state)
+	autoFarmEnabled = state
+
+	RefreshButton()
+
+	if autoFarmEnabled then
+		Debug("ON")
+		task.spawn(StartFarm)
+	else
 		Debug("OFF")
 
+		currentTargetModel = nil
 		currentTargetPart = nil
+
 		UnfreezePlayer()
 		camera.CameraType = oldCameraType
 	end
@@ -607,6 +653,8 @@ end
 local function DestroyAll()
 	destroyed = true
 	autoFarmEnabled = false
+
+	currentTargetModel = nil
 	currentTargetPart = nil
 
 	UnfreezePlayer()
@@ -626,11 +674,13 @@ local function DestroyAll()
 end
 
 --==================================================
--- CAMÉRA + NOCLIP
+-- CAMÉRA + NOCLIP LOCAL
 --==================================================
 
 table.insert(connections, RunService.RenderStepped:Connect(function()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
 
 	if autoFarmEnabled then
 		DisableCollisions()
@@ -657,13 +707,24 @@ end))
 --==================================================
 
 table.insert(connections, toggleButton.Activated:Connect(function()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
+
 	SetAutoFarm(not autoFarmEnabled)
 end))
 
 table.insert(connections, closeButton.Activated:Connect(function()
-	if destroyed then return end
+	if destroyed then
+		return
+	end
+
 	DestroyAll()
 end))
 
+--==================================================
+-- DÉMARRAGE
+--==================================================
+
+RefreshButton()
 Debug("Script chargé - Version " .. VERSION)
