@@ -2,7 +2,7 @@
 -- CONFIG GÉNÉRALE
 --==================================================
 
-local VERSION = "1.3.0"
+local VERSION = "1.4.0"  -- version avec buffer
 
 local REMOTE_NAME = "Remote_Event"
 
@@ -12,6 +12,17 @@ local contenants = {
 	"OilBucket",
 	"SoilMound",
 	"Fridge"
+}
+
+-- Buffers pour chaque type de conteneur (à compléter)
+-- Format attendu par le serveur : buffer.fromstring("...")
+-- En Lua, on écrit directement la chaîne binaire.
+local actionBuffers = {
+	SoilMound = "\147\a|\145\200\001",   -- exemple fourni
+	Cabinet   = nil,  -- À trouver en jeu
+	Crate     = nil,
+	OilBucket = nil,
+	Fridge    = nil,
 }
 
 local moveSpeed = 700
@@ -344,54 +355,37 @@ local function MoveToCFrame(targetCFrame)
 end
 
 --==================================================
--- INTERACTION PROPRE
+-- INTERACTION AVEC BUFFER (NOUVEAU)
 --==================================================
 
-local function GetActionName(model)
+local function GetActionBuffer(model)
 	local nameType = model.Name:match("^(%a+)_")
-
-	if nameType == "OilBucket" then
-		return "OpenOilBucket"
-	elseif nameType == "Crate" then
-		return "OpenCrate"
-	elseif nameType == "Cabinet" then
-		return "OpenCabinet"
-	elseif nameType == "SoilMound" then
-		return "OpenSoilMound"
-	elseif nameType == "Fridge" then
-		return "OpenFridge"
-	end
-
-	return nil
+	return actionBuffers[nameType]
 end
 
 local function ClickContainer(model)
-	if not model then
+	if not model or not model.Parent then
 		return false
 	end
 
-	if not model.Parent then
-		return false
-	end
-
-	local actionName = GetActionName(model)
-
-	if not actionName then
-		Debug(model.Name .. " : action inconnue")
+	local buffer = GetActionBuffer(model)
+	if not buffer then
+		Debug(model.Name .. " : buffer d'action inconnu (type non supporté ou buffer manquant)")
 		return false
 	end
 
 	local success, err = pcall(function()
-		remoteEvent:FireServer(actionName, model)
+		-- Format attendu : buffer (string binaire) et une table contenant l'objet
+		remoteEvent:FireServer(buffer, { model })
 	end)
 
 	if not success then
-		Debug(model.Name .. " : erreur Remote_Event")
+		Debug(model.Name .. " : erreur lors de l'appel du remote")
 		warn(err)
 		return false
 	end
 
-	Debug(model.Name .. " : demande envoyée")
+	Debug(model.Name .. " : clic envoyé avec buffer")
 	return true
 end
 
@@ -515,7 +509,7 @@ local function Step1_OpenAllContainers()
 end
 
 --==================================================
--- ÉTAPE 2 : RÉCUPÉRER ET DÉPOSER
+-- ÉTAPE 2 : RÉCUPÉRER ET DÉPOSER (à configurer)
 --==================================================
 
 local function Step2_CollectAndDrop()
@@ -524,7 +518,7 @@ local function Step2_CollectAndDrop()
 end
 
 --==================================================
--- ÉTAPE 3 : AMÉLIORER LES ITEMS
+-- ÉTAPE 3 : AMÉLIORER LES ITEMS (à configurer)
 --==================================================
 
 local function Step3_UpgradeItems()
@@ -680,4 +674,4 @@ end))
 --==================================================
 
 RefreshButton()
-Debug("Script chargé - Version " .. VERSION)
+Debug("Script chargé - Version " .. VERSION .. " (buffer mode)")
