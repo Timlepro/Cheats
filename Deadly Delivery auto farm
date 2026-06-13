@@ -1,11 +1,10 @@
 --==================================================
--- CONFIG GÉNÉRALE
+-- AUTO FARM V2 - PROXIMITY PROMPT (touche E)
 --==================================================
 
-local VERSION = "1.5.0"
+local VERSION = "2.0.0"
 
-local REMOTE_NAME = "Remote_Event"
-
+-- Configuration
 local contenants = {
 	"Cabinet",
 	"Crate",
@@ -14,50 +13,31 @@ local contenants = {
 	"Fridge"
 }
 
--- Buffers capturés
-local actionBuffers = {
-	SoilMound = "\147\a|\145\200\001",   -- exemple initial
-	Crate     = "\147/}\145\200\001",    -- trouvé pour Crate_19
-	Cabinet   = "\147\204\207}\145\200\001", -- trouvé pour Cabinet
-	OilBucket = nil,  -- À capturer
-	Fridge    = nil,  -- À capturer
-}
-
 local moveSpeed = 700
-local underOffset = 2.2
-
+local underOffset = 2.2          -- décalage sous l'objet
 local openSpamCount = 8
 local openSpamDelay = 0.05
 local waitOpenTimeout = 1.2
-
 local maxOpenTriesPerContainer = 5
 
 --==================================================
 -- SERVICES
 --==================================================
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
---==================================================
--- VARIABLES
---==================================================
-
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
 
-local remoteEvent = ReplicatedStorage:WaitForChild(REMOTE_NAME)
-
+--==================================================
+-- VARIABLES
+--==================================================
 local destroyed = false
 local autoFarmEnabled = false
 local farming = false
-
 local currentTargetModel = nil
 local currentTargetPart = nil
-
 local connections = {}
 local failedAttempts = {}
 local skippedModels = {}
@@ -72,13 +52,11 @@ local oldAutoRotate = nil
 --==================================================
 -- INTERFACE MODERNISÉE
 --==================================================
-
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AutoFarmUI"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
--- Panel principal
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 300, 0, 120)
 mainFrame.Position = UDim2.new(0.5, 0, 0.07, 0)
@@ -89,7 +67,6 @@ mainFrame.BorderSizePixel = 0
 mainFrame.ClipsDescendants = true
 mainFrame.Parent = screenGui
 
--- Ombre
 local shadow = Instance.new("Frame")
 shadow.Size = mainFrame.Size + UDim2.new(0, 8, 0, 8)
 shadow.Position = UDim2.new(0.5, 0, 0.07, 4)
@@ -107,7 +84,6 @@ local shadowCorner = Instance.new("UICorner")
 shadowCorner.CornerRadius = UDim.new(0, 16)
 shadowCorner.Parent = shadow
 
--- Dégradé
 local gradient = Instance.new("UIGradient")
 gradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 55)),
@@ -116,7 +92,6 @@ gradient.Color = ColorSequence.new({
 gradient.Rotation = 45
 gradient.Parent = mainFrame
 
--- Bouton toggle
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0.65, 0, 0.4, 0)
 toggleButton.Position = UDim2.new(0.5, 0, 0.42, 0)
@@ -134,7 +109,6 @@ local toggleCorner = Instance.new("UICorner")
 toggleCorner.CornerRadius = UDim.new(0, 30)
 toggleCorner.Parent = toggleButton
 
--- Bouton fermer
 local closeButton = Instance.new("ImageButton")
 closeButton.Size = UDim2.new(0, 32, 0, 32)
 closeButton.Position = UDim2.new(1, -12, 0, 12)
@@ -149,7 +123,6 @@ local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(1, 0)
 closeCorner.Parent = closeButton
 
--- Version
 local versionLabel = Instance.new("TextLabel")
 versionLabel.Size = UDim2.new(1, -20, 0, 24)
 versionLabel.Position = UDim2.new(0.5, 0, 0.86, 0)
@@ -161,7 +134,6 @@ versionLabel.TextScaled = true
 versionLabel.Font = Enum.Font.Gotham
 versionLabel.Parent = mainFrame
 
--- Zone debug
 local debugFrame = Instance.new("Frame")
 debugFrame.Size = UDim2.new(0, 420, 0, 160)
 debugFrame.Position = UDim2.new(1, -15, 0, 15)
@@ -188,7 +160,6 @@ debugLabel.Font = Enum.Font.Gotham
 debugLabel.Text = "Debug : prêt"
 debugLabel.Parent = debugFrame
 
--- Animation hover
 toggleButton.MouseEnter:Connect(function()
     toggleButton:TweenSize(UDim2.new(0.7, 0, 0.44, 0), "Out", "Quad", 0.2, true)
 end)
@@ -199,10 +170,9 @@ end)
 --==================================================
 -- DEBUG
 --==================================================
-
-local function Debug(message)
-	print("[AUTO FARM] " .. message)
-	table.insert(lastDebugLines, 1, message)
+local function Debug(msg)
+	print("[AUTO FARM] " .. msg)
+	table.insert(lastDebugLines, 1, msg)
 	while #lastDebugLines > 8 do table.remove(lastDebugLines) end
 	debugLabel.Text = "Debug :\n" .. table.concat(lastDebugLines, "\n")
 end
@@ -210,7 +180,6 @@ end
 --==================================================
 -- JOUEUR
 --==================================================
-
 local function GetCharacter()
 	return player.Character or player.CharacterAdded:Wait()
 end
@@ -224,34 +193,34 @@ local function GetRoot()
 end
 
 local function SaveMovement()
-	local humanoid = GetHumanoid()
+	local hum = GetHumanoid()
 	if oldWalkSpeed == nil then
-		oldWalkSpeed = humanoid.WalkSpeed
-		oldJumpPower = humanoid.JumpPower
-		oldJumpHeight = humanoid.JumpHeight
-		oldAutoRotate = humanoid.AutoRotate
+		oldWalkSpeed = hum.WalkSpeed
+		oldJumpPower = hum.JumpPower
+		oldJumpHeight = hum.JumpHeight
+		oldAutoRotate = hum.AutoRotate
 	end
 end
 
 local function FreezePlayer()
-	local humanoid = GetHumanoid()
+	local hum = GetHumanoid()
 	local root = GetRoot()
 	SaveMovement()
-	humanoid.WalkSpeed = 0
-	humanoid.JumpPower = 0
-	humanoid.JumpHeight = 0
-	humanoid.AutoRotate = false
+	hum.WalkSpeed = 0
+	hum.JumpPower = 0
+	hum.JumpHeight = 0
+	hum.AutoRotate = false
 	root.AssemblyLinearVelocity = Vector3.zero
 	root.AssemblyAngularVelocity = Vector3.zero
 end
 
 local function UnfreezePlayer()
-	local humanoid = GetHumanoid()
-	if oldWalkSpeed ~= nil then
-		humanoid.WalkSpeed = oldWalkSpeed
-		humanoid.JumpPower = oldJumpPower
-		humanoid.JumpHeight = oldJumpHeight
-		humanoid.AutoRotate = oldAutoRotate
+	local hum = GetHumanoid()
+	if oldWalkSpeed then
+		hum.WalkSpeed = oldWalkSpeed
+		hum.JumpPower = oldJumpPower
+		hum.JumpHeight = oldJumpHeight
+		hum.AutoRotate = oldAutoRotate
 	end
 	oldWalkSpeed = nil
 	oldJumpPower = nil
@@ -260,35 +229,26 @@ local function UnfreezePlayer()
 end
 
 --==================================================
--- RECHERCHE OBJETS
+-- RECHERCHE DES CONTENEURS
 --==================================================
-
 local function GetFolder()
 	local gameSystem = workspace:FindFirstChild("GameSystem")
 	if not gameSystem then Debug("GameSystem introuvable"); return nil end
-	local folder = gameSystem:FindFirstChild("InteractiveItem")
-	if not folder then Debug("InteractiveItem introuvable"); return nil end
-	return folder
-end
-
-local function IsNameInList(name)
-	for _, validName in ipairs(contenants) do
-		if name == validName then return true end
-	end
-	return false
+	return gameSystem:FindFirstChild("InteractiveItem")
 end
 
 local function IsValidModel(model)
 	if not model:IsA("Model") then return false end
-	local nameType, number = model.Name:match("^(%a+)_([0-9]+)$")
-	if not nameType or not number then return false end
-	return IsNameInList(nameType)
+	local nameType = model.Name:match("^(%a+)_")
+	if not nameType then return false end
+	for _, valid in ipairs(contenants) do
+		if nameType == valid then return true end
+	end
+	return false
 end
 
 local function GetInteractablePart(model)
-	local part = model:FindFirstChild("Interactable", true)
-	if part and part:IsA("BasePart") then return part end
-	return nil
+	return model:FindFirstChild("Interactable", true)
 end
 
 local function GetTargets()
@@ -299,7 +259,7 @@ local function GetTargets()
 		if IsValidModel(model) and not skippedModels[model] then
 			if model:GetAttribute("Open") == false then
 				local part = GetInteractablePart(model)
-				if part then
+				if part and part:IsA("BasePart") then
 					table.insert(targets, { model = model, part = part })
 				end
 			end
@@ -315,97 +275,91 @@ end
 --==================================================
 -- DÉPLACEMENT
 --==================================================
-
 local function GetUnderCFrame(part)
-	local position = part.Position - Vector3.new(0, underOffset, 0)
-	return CFrame.lookAt(position, part.Position)
+	return CFrame.lookAt(part.Position - Vector3.new(0, underOffset, 0), part.Position)
 end
 
 local function MoveToCFrame(targetCFrame)
 	local root = GetRoot()
-	local distance = (root.Position - targetCFrame.Position).Magnitude
-	local duration = math.clamp(distance / moveSpeed, 0.03, 0.8)
+	local dist = (root.Position - targetCFrame.Position).Magnitude
+	local duration = math.clamp(dist / moveSpeed, 0.03, 0.8)
 	local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = targetCFrame })
 	tween:Play()
 	tween.Completed:Wait()
 	root.CFrame = targetCFrame
 	root.AssemblyLinearVelocity = Vector3.zero
-	root.AssemblyAngularVelocity = Vector3.zero
 end
 
 --==================================================
--- INTERACTION AVEC BUFFERS
+-- INTERACTION : TOUCHE E / PROMPT MOBILE
 --==================================================
-
-local function GetActionBuffer(model)
-	local nameType = model.Name:match("^(%a+)_")
-	return actionBuffers[nameType]
-end
-
-local function ClickContainer(model)
-	if not model or not model.Parent then return false end
-	local buffer = GetActionBuffer(model)
-	if not buffer then
-		Debug(model.Name .. " : BUFFER MANQUANT pour " .. (model.Name:match("^(%a+)_") or "?"))
-		return false
+local function TriggerInteraction(part, model)
+	-- 1) Chercher un ProximityPrompt (touche E)
+	local prompt = part:FindFirstChild("ProximityPrompt") or model:FindFirstChild("ProximityPrompt")
+	if prompt and prompt:IsA("ProximityPrompt") then
+		local character = GetCharacter()
+		prompt:Prompt(character)
+		Debug(model.Name .. " : Prompt déclenché (touche E / mobile)")
+		return true
 	end
-	local success, err = pcall(function()
-		remoteEvent:FireServer(buffer, { model })
-	end)
-	if not success then
-		Debug(model.Name .. " : erreur FireServer")
-		warn(err)
-		return false
+	-- 2) Fallback : ClickDetector
+	local click = part:FindFirstChild("ClickDetector") or model:FindFirstChild("ClickDetector")
+	if click and click:IsA("ClickDetector") then
+		click:Click()
+		Debug(model.Name .. " : ClickDetector déclenché")
+		return true
 	end
-	Debug(model.Name .. " : clic buffer envoyé")
-	return true
+	Debug(model.Name .. " : ni Prompt ni ClickDetector trouvé")
+	return false
 end
 
 local function WaitUntilOpen(model)
-	local startTime = os.clock()
-	while autoFarmEnabled and not destroyed and os.clock() - startTime < waitOpenTimeout do
+	local start = os.clock()
+	while autoFarmEnabled and not destroyed and os.clock() - start < waitOpenTimeout do
 		if model:GetAttribute("Open") == true then
-			Debug(model.Name .. " : ouvert")
 			return true
 		end
 		task.wait(0.03)
 	end
-	Debug(model.Name .. " : toujours fermé")
 	return false
 end
 
-local function TryOpenContainer(model)
-	if not model then return false end
-	Debug(model.Name .. " : tentative ouverture")
+local function TryOpenContainer(model, part)
+	Debug(model.Name .. " : tentative d'ouverture")
 	for i = 1, openSpamCount do
-		if destroyed or not autoFarmEnabled then return false end
+		if not autoFarmEnabled or destroyed then return false end
 		if model:GetAttribute("Open") == true then return true end
-		ClickContainer(model)
+		TriggerInteraction(part, model)
 		task.wait(openSpamDelay)
 	end
 	return WaitUntilOpen(model)
 end
 
 --==================================================
--- ÉTAPE 1 : OUVRIR
+-- ÉTAPE 1 : OUVRIR TOUS LES CONTENEURS
 --==================================================
-
 local function Step1_OpenOneContainer(target)
 	if not target or not target.model or not target.part then return false end
 	local model, part = target.model, target.part
+
 	Debug("Déplacement vers " .. model.Name)
 	MoveToCFrame(GetUnderCFrame(part))
+
 	currentTargetModel = model
 	currentTargetPart = part
 	FreezePlayer()
-	local opened = TryOpenContainer(model)
+
+	local opened = TryOpenContainer(model, part)
+
 	currentTargetModel = nil
 	currentTargetPart = nil
 	UnfreezePlayer()
+
 	if opened then
 		Debug(model.Name .. " : ouvert avec succès")
 		return true
 	end
+
 	failedAttempts[model] = (failedAttempts[model] or 0) + 1
 	if failedAttempts[model] >= maxOpenTriesPerContainer then
 		skippedModels[model] = true
@@ -422,49 +376,44 @@ local function Step1_OpenAllContainers()
 			Debug("Étape 1 terminée")
 			return true
 		end
-		local target = targets[1]
-		if target and target.model then
-			Step1_OpenOneContainer(target)
-		else
-			task.wait(0.1)
-		end
+		Step1_OpenOneContainer(targets[1])
 		task.wait(0.1)
 	end
 	return false
 end
 
 --==================================================
--- ÉTAPE 2 & 3 (à compléter)
+-- ÉTAPES 2 et 3 (à personnaliser)
 --==================================================
-
 local function Step2_CollectAndDrop()
-	Debug("Étape 2 : à implémenter")
+	Debug("Étape 2 : à implémenter (ramasser/déposer)")
 	return true
 end
 
 local function Step3_UpgradeItems()
-	Debug("Étape 3 : à implémenter")
+	Debug("Étape 3 : à implémenter (améliorer)")
 	return true
 end
 
 --==================================================
--- FARM PRINCIPAL
+-- BOUCLE PRINCIPALE
 --==================================================
-
 local function StartFarm()
 	if farming then return end
 	farming = true
-	Debug("Auto-farm démarré")
-	local step1Done = Step1_OpenAllContainers()
-	if step1Done and autoFarmEnabled and not destroyed then
+	Debug("Auto-farm démarré (mode Prompt E)")
+
+	if Step1_OpenAllContainers() and autoFarmEnabled and not destroyed then
 		Step2_CollectAndDrop()
 		if autoFarmEnabled and not destroyed then
 			Step3_UpgradeItems()
 		end
 	end
+
 	while autoFarmEnabled and not destroyed do
 		task.wait(0.5)
 	end
+
 	currentTargetModel = nil
 	currentTargetPart = nil
 	UnfreezePlayer()
@@ -476,9 +425,8 @@ local function StartFarm()
 end
 
 --==================================================
--- BOUTONS & ÉTAT
+-- CONTROLES
 --==================================================
-
 local function RefreshButton()
 	if autoFarmEnabled then
 		toggleButton.Text = "■ ARRÊTER"
@@ -510,9 +458,6 @@ local function DestroyAll()
 	currentTargetModel = nil
 	currentTargetPart = nil
 	UnfreezePlayer()
-	if camera.CameraType == Enum.CameraType.Scriptable then
-		camera.CameraType = oldCameraType
-	end
 	for _, conn in ipairs(connections) do
 		if conn then conn:Disconnect() end
 	end
@@ -521,9 +466,8 @@ local function DestroyAll()
 end
 
 --==================================================
--- CAMÉRA (lock)
+-- CAMÉRA DE LOCK (optionnel)
 --==================================================
-
 table.insert(connections, RunService.RenderStepped:Connect(function()
 	if destroyed then return end
 	if currentTargetPart and currentTargetPart.Parent then
@@ -541,7 +485,7 @@ table.insert(connections, RunService.RenderStepped:Connect(function()
 	end
 end))
 
--- Connexions boutons
+-- Connexion des boutons
 table.insert(connections, toggleButton.Activated:Connect(function()
 	if not destroyed then SetAutoFarm(not autoFarmEnabled) end
 end))
@@ -552,7 +496,5 @@ end))
 --==================================================
 -- INIT
 --==================================================
-
 RefreshButton()
-Debug("Script chargé - v" .. VERSION .. " | Buffers : SoilMound, Crate, Cabinet")
-Debug("⚠️ Manque OilBucket et Fridge → utilise l'espion pour les obtenir")
+Debug("Script chargé - v" .. VERSION .. " | Interaction : touche E / mobile")
