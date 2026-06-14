@@ -1,25 +1,172 @@
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local character = player.Character
-local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+-- ==================================================
+-- INTERACTION FORCÉE – Test de toutes les méthodes
+-- ==================================================
 
-local function pressE()
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local player = Players.LocalPlayer
+
+-- ==================================================
+-- CONFIGURATION – Adapter ici si besoin
+-- ==================================================
+local REMOTE_NAME = "Remote_Event"   -- Nom du remote (vérifie avec un espion si différent)
+local TYPES = {"Cabinet", "Crate", "OilBucket", "SoilMound", "Fridge"}
+
+-- Buffers déjà connus (tu peux en ajouter d'autres)
+local BUFFERS = {
+    SoilMound = "\147\a|\145\200\001",
+    Crate     = "\147/}\145\200\001",
+    Cabinet   = "\147\204\207}\145\200\001",
+    -- OilBucket et Fridge : on va les essayer plus tard
+}
+
+-- ==================================================
+-- Récupération du premier conteneur fermé
+-- ==================================================
+local function getFirstClosedContainer()
+    local gameSystem = workspace:FindFirstChild("GameSystem")
+    if not gameSystem then return nil, "GameSystem introuvable" end
+    local interactive = gameSystem:FindFirstChild("InteractiveItem")
+    if not interactive then return nil, "InteractiveItem introuvable" end
+    
+    for _, model in ipairs(interactive:GetChildren()) do
+        if model:IsA("Model") then
+            local typeName = model.Name:match("^(%a+)_")
+            if typeName and table.find(TYPES, typeName) then
+                if model:GetAttribute("Open") == false then
+                    local part = model:FindFirstChild("Interactable", true)
+                    if part and part:IsA("BasePart") then
+                        return model, part, typeName
+                    end
+                end
+            end
+        end
+    end
+    return nil, "Aucun conteneur fermé trouvé"
+end
+
+-- ==================================================
+-- MÉTHODES D'INTERACTION (on va toutes les essayer)
+-- ==================================================
+
+-- Méthode 1 : Appel direct du remote avec buffer
+function tryRemote(model, typeName)
+    local remote = ReplicatedStorage:FindFirstChild(REMOTE_NAME)
+    if not remote then return false, "Remote introuvable" end
+    
+    local buffer = BUFFERS[typeName]
+    if not buffer then return false, "Pas de buffer pour " .. typeName end
+    
+    local success, err = pcall(function()
+        remote:FireServer(buffer, { model })
+    end)
+    if success then return true, "Remote OK" else return false, err end
+end
+
+-- Méthode 2 : Simulation touche E
+function tryPressE()
     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(0.05)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+    return true, "Touche E simulée"
 end
 
-local function teleportAndFarm(targetPart)
-    if not targetPart or not targetPart.Parent then return end
-    local targetPos = targetPart.Position - Vector3.new(0, 2.5, 0)
-    humanoidRootPart.CFrame = CFrame.new(targetPos)
-    task.wait(0.5)
-    for i = 1, 20 do
-        pressE()
-        task.wait(0.1)
+-- Méthode 3 : Clic souris sur la partie Interactable
+function tryMouseClick(part)
+    local cam = workspace.CurrentCamera
+    local pos, onScreen = cam:WorldToScreenPoint(part.Position)
+    if not onScreen then return false, "Hors écran" end
+    VirtualInputManager:SendMouseMoveEvent(pos.X, pos.Y, 0, game)
+    task.wait()
+    VirtualInputManager:SendMouseButtonEvent(true, Enum.UserInputType.MouseButton1, 0, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendMouseButtonEvent(false, Enum.UserInputType.MouseButton1, 0, false, game)
+    return true, "Clic souris"
+end
+
+-- Méthode 4 : ProximityPrompt (si existant)
+function tryPrompt(part)
+    local prompt = part:FindFirstChild("ProximityPrompt")
+    if not prompt then return false, "Pas de ProximityPrompt" end
+    local character = player.Character
+    if not character then return false, "Pas de personnage" end
+    prompt:Prompt(character)
+    return true, "Prompt déclenché"
+end
+
+-- Méthode 5 : ClickDetector
+function tryClickDetector(part)
+    local detector = part:FindFirstChild("ClickDetector")
+    if not detector then return false, "Pas de ClickDetector" end
+    detector:Click()
+    return true, "ClickDetector"
+end
+
+-- Méthode 6 : Tenter de définir l'attribut Open directement (cheat)
+function tryForceOpen(model)
+    if model:GetAttribute("Open") == false then
+        model:SetAttribute("Open", true)
+        return true, "Attribut forcé"
+    end
+    return false, "Déjà ouvert"
+end
+
+-- ==================================================
+-- TEST EN BOUCLE
+-- ==================================================
+local model, part, typeName = getFirstClosedContainer()
+if not model then
+    warn("[ERREUR] " .. (part or "Aucun conteneur"))
+    return
+end
+
+print("\n🎯 CIBLE : " .. model.Name .. " (type " .. typeName .. ")")
+print("📦 Partie Interactable : " .. (part and part.Name or "NON TROUVÉE"))
+
+-- Vérifier la structure
+if part then
+    print("🔍 Enfants de Interactable :")
+    for _, child in ipairs(part:GetChildren()) do
+        print("   - " .. child.Name .. " (" .. child.ClassName .. ")")
     end
 end
 
-local targetPart = workspace:WaitForChild("GameSystem"):WaitForChild("InteractiveItem"):WaitForChild("OilBucket_XX"):FindFirstChild("Interactable", true)
-teleportAndFarm(targetPart)
+-- On se déplace sous l'objet
+local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+if root and part then
+    local targetCF = CFrame.lookAt(part.Position - Vector3.new(0, 2.2, 0), part.Position)
+    root.CFrame = targetCF
+    task.wait(0.5)
+end
+
+-- Liste des méthodes à essayer
+local methods = {
+    { name = "Remote",         func = function() return tryRemote(model, typeName) end },
+    { name = "ProximityPrompt",func = function() return tryPrompt(part) end },
+    { name = "ClickDetector",  func = function() return tryClickDetector(part) end },
+    { name = "Touche E",       func = tryPressE },
+    { name = "Clic souris",    func = function() return tryMouseClick(part) end },
+    { name = "Force Open attr",func = function() return tryForceOpen(model) end },
+}
+
+-- On essaie chaque méthode jusqu'à ce que l'attribut Open devienne true
+for _, method in ipairs(methods) do
+    print("\n--- Test : " .. method.name .. " ---")
+    for attempt = 1, 3 do
+        local success, msg = method.func()
+        print("   Essai " .. attempt .. " : " .. msg)
+        task.wait(0.3)
+        
+        -- Vérifier si ouvert
+        if model:GetAttribute("Open") == true then
+            print("✅✅✅ SUCCÈS ! Conteneur ouvert avec " .. method.name)
+            return
+        end
+    end
+end
+
+print("\n❌ ÉCHEC TOTAL – Aucune méthode n'a ouvert le conteneur.")
+print("👉 Vérifie que le personnage est bien positionné sous l'objet.")
+print("👉 Essaie de cliquer manuellement toi-même pour confirmer que l'objet est bien interactif.")
+print("👉 Peut-être que le jeu utilise un anti-exploit basé sur la distance ou le temps.")
