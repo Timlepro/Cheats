@@ -1,60 +1,25 @@
--- ============================================
--- REMOTE SPY ULTRA SIMPLE
--- Capture tous les FireServer sur Remote_Event
--- ============================================
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character
+local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local remote = ReplicatedStorage:FindFirstChild("Remote_Event")
-
-if not remote then
-    warn("Remote_Event introuvable. Liste des RemoteEvent disponibles :")
-    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-        if obj:IsA("RemoteEvent") then
-            print(" - " .. obj.Name)
-        end
-    end
-    return
+local function pressE()
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
 end
 
--- Sauvegarde de la fonction originale
-local originalFire = remote.FireServer
-
--- Remplacement
-remote.FireServer = function(self, ...)
-    local args = {...}
-    print("\n🔔 Remote_Event intercepté !")
-    
-    for i, arg in ipairs(args) do
-        local argType = typeof(arg)
-        if argType == "string" then
-            -- Convertit la chaîne en littéral échappé
-            local literal = ""
-            for byte in string.gmatch(arg, ".") do
-                local b = string.byte(byte)
-                if b < 32 or b > 126 then
-                    literal = literal .. "\\" .. b
-                else
-                    literal = literal .. byte
-                end
-            end
-            print(string.format("  Argument %d (string) : %q", i, arg))
-            print(string.format("    → Buffer littéral : \"%s\"", literal))
-        elseif argType == "table" then
-            print("  Argument " .. i .. " (table) :")
-            for k, v in pairs(arg) do
-                if typeof(v) == "Instance" then
-                    print("    [" .. tostring(k) .. "] = " .. v:GetFullName())
-                else
-                    print("    [" .. tostring(k) .. "] = " .. tostring(v))
-                end
-            end
-        else
-            print("  Argument " .. i .. " (" .. argType .. ") : " .. tostring(arg))
-        end
+local function teleportAndFarm(targetPart)
+    if not targetPart or not targetPart.Parent then return end
+    local targetPos = targetPart.Position - Vector3.new(0, 2.5, 0)
+    humanoidRootPart.CFrame = CFrame.new(targetPos)
+    task.wait(0.5)
+    for i = 1, 20 do
+        pressE()
+        task.wait(0.1)
     end
-    
-    -- Appel original
-    return originalFire(self, unpack(args))
 end
 
-print("✅ Remote Spy actif ! Clique maintenant sur un conteneur.")
+local targetPart = workspace:WaitForChild("GameSystem"):WaitForChild("InteractiveItem"):WaitForChild("OilBucket_XX"):FindFirstChild("Interactable", true)
+teleportAndFarm(targetPart)
