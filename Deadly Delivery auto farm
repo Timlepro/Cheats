@@ -1,41 +1,254 @@
 --==================================================
--- AUTO FARM ULTRA SIMPLE (sans UI, juste print)
--- Simulation clic utilisateur (touche E + clic souris)
--- 5 essais max par conteneur
+-- AUTO FARM V3 - MODE APPRENTISSAGE
+-- Interface déplaçable / réductible
 --==================================================
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
 
 -- Configuration
 local MOVE_SPEED = 700
 local UNDER_OFFSET = 2.2
-local MAX_ATTEMPTS = 5          -- 5 essais max par conteneur
+local MAX_ATTEMPTS = 5
 local SPAM_COUNT = 8
 local SPAM_DELAY = 0.05
 local WAIT_TIMEOUT = 1.2
 
--- Types de conteneurs
 local CONTAINER_TYPES = {
     "Cabinet", "Crate", "OilBucket", "SoilMound", "Fridge"
 }
 
--- État
+-- Stockage des arguments capturés
+local capturedArgs = {}  -- ["SoilMound"] = {buffer, {model}} ou autre structure
+
+-- Variables d'état
+local autoFarmEnabled = false
 local farming = false
 local currentTarget = nil
-local oldWalkSpeed = nil
-local oldJumpPower = nil
-local oldJumpHeight = nil
-local oldAutoRotate = nil
+local currentPart = nil
+local recordingMode = false   -- mode capture manuelle
+local remoteEvent = ReplicatedStorage:WaitForChild("Remote_Event")
+local originalFireServer = remoteEvent.FireServer
+
+-- Sauvegarde des mouvements/caméra
+local oldWalkSpeed, oldJumpPower, oldJumpHeight, oldAutoRotate
 local oldCameraType = camera.CameraType
 
+-- Interface
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoFarmGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 280)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -140)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BackgroundTransparency = 0.1
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true  -- permet de déplacer la fenêtre
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = mainFrame
+
+-- Titre + bouton réduire
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+titleBar.BackgroundTransparency = 0.2
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -40, 1, 0)
+titleLabel.Position = UDim2.new(0, 5, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "⚙️ AutoFarm v3 (apprentissage)"
+titleLabel.TextColor3 = Color3.fromRGB(255,255,255)
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 14
+titleLabel.Parent = titleBar
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 30, 1, 0)
+minimizeButton.Position = UDim2.new(1, -30, 0, 0)
+minimizeButton.BackgroundColor3 = Color3.fromRGB(60,60,80)
+minimizeButton.Text = "−"
+minimizeButton.TextColor3 = Color3.new(1,1,1)
+minimizeButton.TextSize = 20
+minimizeButton.Font = Enum.Font.GothamBold
+minimizeButton.Parent = titleBar
+minimizeButton.AutoButtonColor = false
+
+local contentFrame = Instance.new("Frame")
+contentFrame.Size = UDim2.new(1, 0, 1, -30)
+contentFrame.Position = UDim2.new(0, 0, 0, 30)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+local toggleRecordBtn = Instance.new("TextButton")
+toggleRecordBtn.Size = UDim2.new(0, 180, 0, 36)
+toggleRecordBtn.Position = UDim2.new(0.5, -90, 0, 10)
+toggleRecordBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+toggleRecordBtn.Text = "🔴 MODE CAPTURE : OFF"
+toggleRecordBtn.TextColor3 = Color3.new(1,1,1)
+toggleRecordBtn.Font = Enum.Font.GothamBold
+toggleRecordBtn.TextSize = 14
+toggleRecordBtn.Parent = contentFrame
+local recordCorner = Instance.new("UICorner")
+recordCorner.CornerRadius = UDim.new(0, 8)
+recordCorner.Parent = toggleRecordBtn
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0, 280, 0, 40)
+statusLabel.Position = UDim2.new(0.5, -140, 0, 55)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Statut : En attente"
+statusLabel.TextColor3 = Color3.fromRGB(200,200,200)
+statusLabel.TextWrapped = true
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 12
+statusLabel.Parent = contentFrame
+
+local startAutoBtn = Instance.new("TextButton")
+startAutoBtn.Size = UDim2.new(0, 140, 0, 40)
+startAutoBtn.Position = UDim2.new(0.5, -150, 0, 110)
+startAutoBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 70)
+startAutoBtn.Text = "🚀 AUTO FARM ON"
+startAutoBtn.TextColor3 = Color3.new(1,1,1)
+startAutoBtn.Font = Enum.Font.GothamBold
+startAutoBtn.TextSize = 14
+startAutoBtn.Parent = contentFrame
+local autoCorner = Instance.new("UICorner")
+autoCorner.CornerRadius = UDim.new(0, 8)
+autoCorner.Parent = startAutoBtn
+
+local stopAutoBtn = Instance.new("TextButton")
+stopAutoBtn.Size = UDim2.new(0, 140, 0, 40)
+stopAutoBtn.Position = UDim2.new(0.5, 10, 0, 110)
+stopAutoBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+stopAutoBtn.Text = "⏹️ AUTO FARM OFF"
+stopAutoBtn.TextColor3 = Color3.new(1,1,1)
+stopAutoBtn.Font = Enum.Font.GothamBold
+stopAutoBtn.TextSize = 14
+stopAutoBtn.Parent = contentFrame
+local stopCorner = Instance.new("UICorner")
+stopCorner.CornerRadius = UDim.new(0, 8)
+stopCorner.Parent = stopAutoBtn
+
+local debugScroll = Instance.new("ScrollingFrame")
+debugScroll.Size = UDim2.new(0, 290, 0, 80)
+debugScroll.Position = UDim2.new(0.5, -145, 0, 170)
+debugScroll.BackgroundColor3 = Color3.fromRGB(20,20,30)
+debugScroll.BorderSizePixel = 0
+debugScroll.CanvasSize = UDim2.new(0,0,0,0)
+debugScroll.ScrollBarThickness = 6
+debugScroll.Parent = contentFrame
+local scrollCorner = Instance.new("UICorner")
+scrollCorner.CornerRadius = UDim.new(0, 6)
+scrollCorner.Parent = debugScroll
+
+local debugText = Instance.new("TextLabel")
+debugText.Size = UDim2.new(1, -10, 0, 0)
+debugText.Position = UDim2.new(0, 5, 0, 5)
+debugText.BackgroundTransparency = 1
+debugText.TextColor3 = Color3.fromRGB(200,200,200)
+debugText.TextXAlignment = Enum.TextXAlignment.Left
+debugText.TextYAlignment = Enum.TextYAlignment.Top
+debugText.TextSize = 11
+debugText.Font = Enum.Font.Gotham
+debugText.Text = "Console :\n"
+debugText.Parent = debugScroll
+
+-- Gestion réduire/agrandir
+local minimized = false
+local originalSize = mainFrame.Size
+local originalContentVisible = true
+minimizeButton.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        originalSize = mainFrame.Size
+        mainFrame.Size = UDim2.new(0, 320, 0, 40)
+        contentFrame.Visible = false
+        minimizeButton.Text = "+"
+    else
+        mainFrame.Size = originalSize
+        contentFrame.Visible = true
+        minimizeButton.Text = "−"
+    end
+end)
+
+-- Fonction pour afficher dans la console de l'interface
+local function AddDebugMsg(msg)
+    local current = debugText.Text
+    local lines = {}
+    for line in current:gmatch("[^\n]+") do
+        table.insert(lines, line)
+    end
+    table.insert(lines, os.date("%H:%M:%S") .. " > " .. msg)
+    if #lines > 15 then table.remove(lines, 1) end
+    debugText.Text = table.concat(lines, "\n")
+    debugScroll.CanvasSize = UDim2.new(0, 0, 0, debugText.TextBounds.Y + 10)
+    print("[AUTOFARM] " .. msg)
+end
+
 --==================================================
--- FONCTIONS UTILITAIRES
+-- CAPTURE DES REMOTES (mode apprentissage)
+--==================================================
+local function EnableCaptureMode(enable)
+    recordingMode = enable
+    if enable then
+        -- Intercepter FireServer
+        remoteEvent.FireServer = function(self, ...)
+            local args = {...}
+            -- Identifier le type de conteneur à partir du second argument (table contenant le modèle)
+            local model = args[2] and args[2][1]
+            local containerType = nil
+            if model and model:IsA("Model") then
+                containerType = model.Name:match("^(%a+)_")
+            end
+            if containerType then
+                capturedArgs[containerType] = args  -- sauvegarde exacte des arguments
+                AddDebugMsg("📥 CAPTURÉ " .. containerType .. " : " .. tostring(#args) .. " args")
+            else
+                AddDebugMsg("⚠️ Capture reçue mais type inconnu")
+            end
+            -- On laisse passer l'appel original
+            return originalFireServer(self, ...)
+        end
+        toggleRecordBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        toggleRecordBtn.Text = "🔴 MODE CAPTURE : ON"
+        AddDebugMsg("Mode CAPTURE activé. Clique sur un conteneur pour enregistrer son RemoteEvent.")
+    else
+        -- Restaurer le FireServer original
+        remoteEvent.FireServer = originalFireServer
+        toggleRecordBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+        toggleRecordBtn.Text = "🔴 MODE CAPTURE : OFF"
+        AddDebugMsg("Mode CAPTURE désactivé.")
+    end
+end
+
+toggleRecordBtn.MouseButton1Click:Connect(function()
+    EnableCaptureMode(not recordingMode)
+end)
+
+--==================================================
+-- FONCTIONS JOUEUR / DÉPLACEMENT
 --==================================================
 local function GetCharacter()
     return player.Character or player.CharacterAdded:Wait()
@@ -85,6 +298,86 @@ local function UnfreezePlayer()
     oldAutoRotate = nil
 end
 
+local function GetUnderCFrame(part)
+    return CFrame.lookAt(part.Position - Vector3.new(0, UNDER_OFFSET, 0), part.Position)
+end
+
+local function MoveToCFrame(targetCFrame)
+    local root = GetRoot()
+    local dist = (root.Position - targetCFrame.Position).Magnitude
+    local duration = math.clamp(dist / MOVE_SPEED, 0.03, 0.8)
+    local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+    tween:Play()
+    tween.Completed:Wait()
+    root.CFrame = targetCFrame
+    root.AssemblyLinearVelocity = Vector3.zero
+end
+
+--==================================================
+-- INTERACTION (utilise les captures ou fallback)
+--==================================================
+local function PressE()
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+end
+
+local function ClickOnPart(part)
+    local cam = workspace.CurrentCamera
+    local pos, onScreen = cam:WorldToScreenPoint(part.Position)
+    if not onScreen then return false end
+    VirtualInputManager:SendMouseMoveEvent(pos.X, pos.Y, 0, game)
+    task.wait()
+    VirtualInputManager:SendMouseButtonEvent(true, Enum.UserInputType.MouseButton1, 0, false, game)
+    task.wait(0.05)
+    VirtualInputManager:SendMouseButtonEvent(false, Enum.UserInputType.MouseButton1, 0, false, game)
+    return true
+end
+
+local function InteractWithRemote(model, part)
+    local typeName = model.Name:match("^(%a+)_")
+    local args = capturedArgs[typeName]
+    if args then
+        -- Rejouer exactement les arguments capturés
+        pcall(function()
+            remoteEvent:FireServer(unpack(args))
+        end)
+        AddDebugMsg("📡 Remote utilisé pour " .. typeName)
+        return true
+    else
+        AddDebugMsg("⚠️ Aucune capture pour " .. (typeName or "?"))
+        -- Fallback : simulation E + clic
+        if ClickOnPart(part) then
+            AddDebugMsg("🖱️ Clic souris simulé")
+        else
+            PressE()
+            AddDebugMsg("⌨️ Touche E simulée")
+        end
+        return false
+    end
+end
+
+local function WaitForOpen(model)
+    local start = os.clock()
+    while os.clock() - start < WAIT_TIMEOUT do
+        if model:GetAttribute("Open") == true then
+            return true
+        end
+        task.wait(0.03)
+    end
+    return false
+end
+
+local function TryOpen(model, part)
+    AddDebugMsg("Tentative ouverture " .. model.Name)
+    for i = 1, SPAM_COUNT do
+        if model:GetAttribute("Open") == true then return true end
+        InteractWithRemote(model, part)
+        task.wait(SPAM_DELAY)
+    end
+    return WaitForOpen(model)
+end
+
 --==================================================
 -- RECHERCHE DES CONTENEURS
 --==================================================
@@ -116,7 +409,6 @@ local function GetTargets()
             end
         end
     end
-    -- Tri par distance
     local root = GetRoot()
     table.sort(targets, function(a,b)
         return (root.Position - a.part.Position).Magnitude < (root.Position - b.part.Position).Magnitude
@@ -125,148 +417,90 @@ local function GetTargets()
 end
 
 --==================================================
--- DÉPLACEMENT
+-- BOUCLE AUTO FARM
 --==================================================
-local function GetUnderCFrame(part)
-    return CFrame.lookAt(part.Position - Vector3.new(0, UNDER_OFFSET, 0), part.Position)
-end
-
-local function MoveToCFrame(targetCFrame)
-    local root = GetRoot()
-    local dist = (root.Position - targetCFrame.Position).Magnitude
-    local duration = math.clamp(dist / MOVE_SPEED, 0.03, 0.8)
-    local tween = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
-    tween:Play()
-    tween.Completed:Wait()
-    root.CFrame = targetCFrame
-    root.AssemblyLinearVelocity = Vector3.zero
-end
-
---==================================================
--- SIMULATION DE CLIC UTILISATEUR (touche E + souris)
---==================================================
-local function PressE()
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-    task.wait(0.05)
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-end
-
-local function ClickOnPart(part)
-    local cam = workspace.CurrentCamera
-    local pos, onScreen = cam:WorldToScreenPoint(part.Position)
-    if not onScreen then return false end
-    VirtualInputManager:SendMouseMoveEvent(pos.X, pos.Y, 0, game)
-    task.wait()
-    VirtualInputManager:SendMouseButtonEvent(true, Enum.UserInputType.MouseButton1, 0, false, game)
-    task.wait(0.05)
-    VirtualInputManager:SendMouseButtonEvent(false, Enum.UserInputType.MouseButton1, 0, false, game)
-    return true
-end
-
-local function InteractLikePlayer(part)
-    -- D'abord essayer le clic souris (pour ClickDetector)
-    if ClickOnPart(part) then
-        print("[OK] Clic souris simulé")
-        return true
-    end
-    -- Sinon, appuyer sur E (pour ProximityPrompt)
-    PressE()
-    print("[OK] Touche E simulée")
-    return true
-end
-
---==================================================
--- OUVERTURE D'UN CONTENEUR AVEC SPAM
---==================================================
-local function WaitForOpen(model)
-    local start = os.clock()
-    while os.clock() - start < WAIT_TIMEOUT do
-        if model:GetAttribute("Open") == true then
-            return true
-        end
-        task.wait(0.03)
-    end
-    return false
-end
-
-local function TryOpen(model, part)
-    print("[*] Ouverture de " .. model.Name)
-    for i = 1, SPAM_COUNT do
-        if model:GetAttribute("Open") == true then
-            print("[+] " .. model.Name .. " déjà ouvert")
-            return true
-        end
-        InteractLikePlayer(part)
-        task.wait(SPAM_DELAY)
-    end
-    return WaitForOpen(model)
-end
-
---==================================================
--- FARM PRINCIPAL
---==================================================
-local function FarmContainers()
+local function StartAutoFarm()
     if farming then return end
+    if autoFarmEnabled == false then
+        AddDebugMsg("AutoFarm désactivé, démarrer avec le bouton ON")
+        return
+    end
     farming = true
-    print("=== AUTO FARM DÉMARRÉ (5 essais max par conteneur) ===")
+    AddDebugMsg("=== AUTO FARM LANCÉ ===")
 
     local targets = GetTargets()
     if #targets == 0 then
-        print("[!] Aucun conteneur fermé trouvé")
+        AddDebugMsg("Aucun conteneur fermé trouvé")
         farming = false
         return
     end
 
     for _, target in ipairs(targets) do
-        if not farming then break end
+        if not autoFarmEnabled then break end
         local model, part = target.model, target.part
-
-        print("--- Cible : " .. model.Name .. " ---")
-        -- Déplacement
+        AddDebugMsg("--- Cible : " .. model.Name .. " ---")
         MoveToCFrame(GetUnderCFrame(part))
-        -- Freeze et interaction
         FreezePlayer()
         currentTarget = part
+        currentPart = part
 
         local success = false
         for attempt = 1, MAX_ATTEMPTS do
+            if not autoFarmEnabled then break end
             if model:GetAttribute("Open") == true then
                 success = true
                 break
             end
-            print("[Tentative " .. attempt .. "/" .. MAX_ATTEMPTS .. "]")
+            AddDebugMsg("Essai " .. attempt .. "/" .. MAX_ATTEMPTS)
             if TryOpen(model, part) then
                 success = true
                 break
             end
-            task.wait(0.5) -- petit délai entre les tentatives
+            task.wait(0.5)
         end
 
         currentTarget = nil
+        currentPart = nil
         UnfreezePlayer()
-
         if success then
-            print("[SUCCÈS] " .. model.Name .. " ouvert")
+            AddDebugMsg("✅ " .. model.Name .. " ouvert")
         else
-            print("[ÉCHEC] " .. model.Name .. " non ouvert après " .. MAX_ATTEMPTS .. " essais")
+            AddDebugMsg("❌ " .. model.Name .. " échec")
         end
         task.wait(0.3)
     end
 
-    print("=== AUTO FARM TERMINÉ ===")
+    AddDebugMsg("=== AUTO FARM TERMINÉ ===")
     farming = false
     if camera.CameraType == Enum.CameraType.Scriptable then
         camera.CameraType = oldCameraType
     end
 end
 
---==================================================
--- LANCEMENT AUTOMATIQUE
---==================================================
--- On récupère le type de caméra original
-oldCameraType = camera.CameraType
+startAutoBtn.MouseButton1Click:Connect(function()
+    if recordingMode then
+        AddDebugMsg("Désactive d'abord le mode CAPTURE")
+        return
+    end
+    autoFarmEnabled = true
+    AddDebugMsg("AutoFarm activé")
+    task.spawn(StartAutoFarm)
+end)
 
--- Boucle de maintien de la caméra sur la cible (optionnel)
+stopAutoBtn.MouseButton1Click:Connect(function()
+    autoFarmEnabled = false
+    farming = false
+    currentTarget = nil
+    UnfreezePlayer()
+    if camera.CameraType == Enum.CameraType.Scriptable then
+        camera.CameraType = oldCameraType
+    end
+    AddDebugMsg("AutoFarm désactivé")
+end)
+
+--==================================================
+-- CAMÉRA LOCK PENDANT LE FARM
+--==================================================
 RunService.RenderStepped:Connect(function()
     if currentTarget and currentTarget.Parent then
         local root = GetRoot()
@@ -276,11 +510,10 @@ RunService.RenderStepped:Connect(function()
         camera.CameraType = Enum.CameraType.Scriptable
         camera.CFrame = CFrame.lookAt(root.Position + Vector3.new(0, 1.5, 0), currentTarget.Position + Vector3.new(0, 1, 0))
     else
-        if camera.CameraType == Enum.CameraType.Scriptable then
+        if camera.CameraType == Enum.CameraType.Scriptable and not farming then
             camera.CameraType = oldCameraType
         end
     end
 end)
 
--- Démarrer le farm
-task.spawn(FarmContainers)
+AddDebugMsg("Script chargé. Active le mode CAPTURE, clique sur un conteneur, puis lance AUTO FARM.")
