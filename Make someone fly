@@ -1,6 +1,6 @@
 --[[
     Script UI Mobile/PC - Popup déplaçable avec téléportation infinie
-    Version avec boutons X et - visibles
+    Version avec slider de distance
     À mettre dans un LocalScript dans StarterPlayerScripts
 ]]
 
@@ -16,7 +16,8 @@ local Workspace = game:GetService("Workspace")
 local InfiniteTeleport = {
     Active = false,
     TargetPlayer = nil,
-    Connection = nil
+    Connection = nil,
+    Distance = 0 -- Distance en dessous des pieds (0 = juste sous les pieds)
 }
 
 -- Création de la ScreenGui
@@ -34,11 +35,11 @@ local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
 local function GetAdaptiveSize()
     local screenSize = workspace.CurrentCamera.ViewportSize
     local width = math.min(400, screenSize.X * 0.9)
-    local height = math.min(500, screenSize.Y * 0.85)
+    local height = math.min(550, screenSize.Y * 0.9) -- Augmenté pour le slider
     
     if IsMobile or IsSmallScreen then
         width = math.min(350, screenSize.X * 0.92)
-        height = math.min(450, screenSize.Y * 0.8)
+        height = math.min(500, screenSize.Y * 0.85)
     end
     
     return width, height
@@ -189,11 +190,154 @@ ContentContainer.Position = UDim2.new(0, 0, 0, 40)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.Parent = MainFrame
 
--- ScrollView pour la liste des joueurs
+-- Panneau de contrôle (slider et infos)
+local ControlPanel = Instance.new("Frame")
+ControlPanel.Name = "ControlPanel"
+ControlPanel.Size = UDim2.new(0.95, 0, 0, 60)
+ControlPanel.Position = UDim2.new(0.025, 0, 0, 0)
+ControlPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+ControlPanel.BackgroundTransparency = 0.3
+ControlPanel.BorderSizePixel = 1
+ControlPanel.BorderColor3 = Color3.fromRGB(50, 50, 65)
+ControlPanel.Parent = ContentContainer
+
+local ControlCorner = Instance.new("UICorner")
+ControlCorner.CornerRadius = UDim.new(0, 6)
+ControlCorner.Parent = ControlPanel
+
+-- Label distance
+local DistanceLabel = Instance.new("TextLabel")
+DistanceLabel.Name = "DistanceLabel"
+DistanceLabel.Size = UDim2.new(0.3, 0, 1, 0)
+DistanceLabel.Position = UDim2.new(0.02, 0, 0, 0)
+DistanceLabel.BackgroundTransparency = 1
+DistanceLabel.Text = "📏 Distance: 0"
+DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+DistanceLabel.TextSize = GetAdaptiveFontSize() - 2
+DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+DistanceLabel.Font = Enum.Font.GothamMedium
+DistanceLabel.Parent = ControlPanel
+
+-- Slider de distance
+local SliderTrack = Instance.new("Frame")
+SliderTrack.Name = "SliderTrack"
+SliderTrack.Size = UDim2.new(0.5, 0, 0, 6)
+SliderTrack.Position = UDim2.new(0.35, 0, 0.5, -3)
+SliderTrack.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+SliderTrack.BackgroundTransparency = 0.5
+SliderTrack.BorderSizePixel = 0
+SliderTrack.Parent = ControlPanel
+
+local TrackCorner = Instance.new("UICorner")
+TrackCorner.CornerRadius = UDim.new(1, 0)
+TrackCorner.Parent = SliderTrack
+
+-- Barre de progression du slider
+local SliderFill = Instance.new("Frame")
+SliderFill.Name = "SliderFill"
+SliderFill.Size = UDim2.new(0, 0, 1, 0)
+SliderFill.BackgroundColor3 = Color3.fromRGB(60, 160, 240)
+SliderFill.BackgroundTransparency = 0.2
+SliderFill.BorderSizePixel = 0
+SliderFill.Parent = SliderTrack
+
+local FillCorner = Instance.new("UICorner")
+FillCorner.CornerRadius = UDim.new(1, 0)
+FillCorner.Parent = SliderFill
+
+-- Curseur du slider
+local SliderButton = Instance.new("TextButton")
+SliderButton.Name = "SliderButton"
+SliderButton.Size = UDim2.new(0, 18, 0, 18)
+SliderButton.Position = UDim2.new(0, -9, 0.5, -9)
+SliderButton.BackgroundColor3 = Color3.fromRGB(60, 160, 240)
+SliderButton.BackgroundTransparency = 0.2
+SliderButton.BorderSizePixel = 0
+SliderButton.Text = ""
+SliderButton.Parent = SliderTrack
+
+local SliderCorner = Instance.new("UICorner")
+SliderCorner.CornerRadius = UDim.new(1, 0)
+SliderCorner.Parent = SliderButton
+
+-- Valeur minimale et maximale du slider (en studs)
+local MIN_DISTANCE = -5 -- Au-dessus des pieds
+local MAX_DISTANCE = 20 -- Loin en dessous
+
+-- Fonction pour mettre à jour la distance
+local function UpdateDistance(value)
+    -- Normaliser la valeur entre 0 et 1
+    local normalized = math.clamp((value - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE), 0, 1)
+    
+    -- Mettre à jour la barre de progression
+    SliderFill.Size = UDim2.new(normalized, 0, 1, 0)
+    
+    -- Mettre à jour la position du curseur
+    local trackWidth = SliderTrack.AbsoluteSize.X
+    SliderButton.Position = UDim2.new(normalized, -9, 0.5, -9)
+    
+    -- Mettre à jour la distance
+    InfiniteTeleport.Distance = value
+    
+    -- Mettre à jour le label
+    if value >= 0 then
+        DistanceLabel.Text = "📏 Distance: " .. string.format("%.1f", value) .. " sous les pieds"
+    else
+        DistanceLabel.Text = "📏 Distance: " .. string.format("%.1f", math.abs(value)) .. " au-dessus des pieds"
+    end
+end
+
+-- Fonction pour gérer le drag du slider
+local isDraggingSlider = false
+
+local function StartSliderDrag(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDraggingSlider = true
+        UpdateSliderPosition(input)
+    end
+end
+
+local function UpdateSliderPosition(input)
+    if not isDraggingSlider then return end
+    
+    local trackPosition = SliderTrack.AbsolutePosition
+    local trackSize = SliderTrack.AbsoluteSize
+    local mouseX = input.Position.X
+    
+    local normalized = math.clamp((mouseX - trackPosition.X) / trackSize.X, 0, 1)
+    local value = MIN_DISTANCE + normalized * (MAX_DISTANCE - MIN_DISTANCE)
+    
+    UpdateDistance(value)
+end
+
+local function EndSliderDrag()
+    isDraggingSlider = false
+end
+
+-- Événements du slider
+SliderButton.InputBegan:Connect(StartSliderDrag)
+SliderButton.InputChanged:Connect(UpdateSliderPosition)
+SliderButton.InputEnded:Connect(EndSliderDrag)
+
+-- Aussi sur la track pour faciliter le clic
+SliderTrack.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDraggingSlider = true
+        UpdateSliderPosition(input)
+    end
+end)
+
+SliderTrack.InputChanged:Connect(UpdateSliderPosition)
+SliderTrack.InputEnded:Connect(EndSliderDrag)
+
+-- Initialiser la distance à 0
+UpdateDistance(0)
+
+-- ScrollView pour la liste des joueurs (décalé vers le bas)
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "ScrollFrame"
-ScrollFrame.Size = UDim2.new(0.95, 0, 0.9, 0)
-ScrollFrame.Position = UDim2.new(0.025, 0, 0.05, 0)
+ScrollFrame.Size = UDim2.new(0.95, 0, 0.75, 0)
+ScrollFrame.Position = UDim2.new(0.025, 0, 0.15, 0) -- Décalé pour laisser place au slider
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -306,7 +450,9 @@ local function StartInfiniteTeleport(player)
             local targetPosition = targetHRP.Position
             local rootPart = LocalPlayer.Character.HumanoidRootPart
             
-            local teleportPos = Vector3.new(targetPosition.X, targetPosition.Y - 3.5, targetPosition.Z)
+            -- Utiliser la distance configurée
+            local distance = InfiniteTeleport.Distance or 0
+            local teleportPos = Vector3.new(targetPosition.X, targetPosition.Y - 3.5 + distance, targetPosition.Z)
             rootPart.CFrame = CFrame.new(teleportPos)
             
             for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
@@ -535,7 +681,6 @@ local function ShowMainFrame()
         MainFrame.Position = SavedPosition
     end
     
-    -- Mettre à jour l'état du bouton réduire
     if IsMinimized then
         MinimizeButton.Text = "⊕"
         Title.Text = "👥 Joueurs ▼"
@@ -634,6 +779,7 @@ RunService.RenderStepped:Connect(function()
         
         local newFontSize = GetAdaptiveFontSize()
         Title.TextSize = newFontSize
+        DistanceLabel.TextSize = newFontSize - 2
         
         for _, item in pairs(ScrollFrame:GetChildren()) do
             if item:IsA("Frame") and item.Name:match("PlayerItem_") then
@@ -655,3 +801,4 @@ end)
 print("✅ Player Teleport GUI chargé!")
 print("Bouton - : Réduire la fenêtre")
 print("Bouton X : Fermer et détruire le script")
+print("Slider : Ajuster la distance de téléportation")
