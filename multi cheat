@@ -1,5 +1,6 @@
 --[[
     Script UI Mobile/PC - Popup déplaçable avec exécution de scripts
+    Version avec mode réduit et adaptative
     À mettre dans un LocalScript dans StarterPlayerScripts
 ]]
 
@@ -8,6 +9,7 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 -- Configuration des scripts (à modifier selon vos besoins)
 local Scripts = {
@@ -35,17 +37,55 @@ ScreenGui.Name = "ScriptExecutorGUI"
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 
+-- Variables pour l'adaptation mobile
+local IsMobile = UserInputService.TouchEnabled
+local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
+
+-- Dimensions adaptatives
+local function GetAdaptiveSize()
+    local screenSize = workspace.CurrentCamera.ViewportSize
+    local width = math.min(400, screenSize.X * 0.9)
+    local height = math.min(500, screenSize.Y * 0.85)
+    
+    if IsMobile or IsSmallScreen then
+        width = math.min(350, screenSize.X * 0.92)
+        height = math.min(450, screenSize.Y * 0.8)
+    end
+    
+    return width, height
+end
+
+local function GetAdaptiveFontSize()
+    if IsMobile or IsSmallScreen then
+        return 14
+    end
+    return 18
+end
+
+local function GetAdaptiveButtonSize()
+    if IsMobile or IsSmallScreen then
+        return 70, 30
+    end
+    return 80, 35
+end
+
 -- Fenêtre principale
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 400, 0, 500)
-MainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BackgroundTransparency = 0.95
 MainFrame.BorderSizePixel = 1
 MainFrame.BorderColor3 = Color3.fromRGB(60, 60, 70)
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
+
+-- Appliquer les dimensions adaptatives
+local function UpdateMainFrameSize()
+    local width, height = GetAdaptiveSize()
+    MainFrame.Size = UDim2.new(0, width, 0, height)
+    MainFrame.Position = UDim2.new(0.5, -width/2, 0.5, -height/2)
+end
+UpdateMainFrameSize()
 
 -- Fond avec effet glass
 local GlassEffect = Instance.new("Frame")
@@ -76,15 +116,25 @@ TitleCorner.Parent = TitleBar
 -- Titre
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.Size = UDim2.new(0.7, 0, 1, 0)
+Title.Size = UDim2.new(0.6, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "📁 Script Executor"
 Title.TextColor3 = Color3.fromRGB(220, 220, 230)
-Title.TextSize = 18
+Title.TextSize = GetAdaptiveFontSize()
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
+
+-- Bouton réduire/agrandir
+local ToggleButton = Instance.new("ImageButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Size = UDim2.new(0, 30, 0, 30)
+ToggleButton.Position = UDim2.new(1, -80, 0, 5)
+ToggleButton.BackgroundTransparency = 1
+ToggleButton.Image = "rbxassetid://7072718629"
+ToggleButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
+ToggleButton.Parent = TitleBar
 
 -- Bouton fermer
 local CloseButton = Instance.new("ImageButton")
@@ -96,27 +146,25 @@ CloseButton.Image = "rbxassetid://7072718606"
 CloseButton.ImageColor3 = Color3.fromRGB(200, 50, 50)
 CloseButton.Parent = TitleBar
 
--- Bouton réduire (hide/show)
-local HideButton = Instance.new("ImageButton")
-HideButton.Name = "HideButton"
-HideButton.Size = UDim2.new(0, 30, 0, 30)
-HideButton.Position = UDim2.new(1, -80, 0, 5)
-HideButton.BackgroundTransparency = 1
-HideButton.Image = "rbxassetid://7072718629"
-HideButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
-HideButton.Parent = TitleBar
+-- Conteneur principal (tout sauf la barre de titre)
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Name = "ContentContainer"
+ContentContainer.Size = UDim2.new(1, 0, 1, -40)
+ContentContainer.Position = UDim2.new(0, 0, 0, 40)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Parent = MainFrame
 
 -- ScrollView pour la liste des scripts
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "ScrollFrame"
-ScrollFrame.Size = UDim2.new(0.95, 0, 0.8, 0)
-ScrollFrame.Position = UDim2.new(0.025, 0, 0.1, 0)
+ScrollFrame.Size = UDim2.new(0.95, 0, 0.9, 0)
+ScrollFrame.Position = UDim2.new(0.025, 0, 0.05, 0)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 ScrollFrame.ScrollBarThickness = 6
 ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
-ScrollFrame.Parent = MainFrame
+ScrollFrame.Parent = ContentContainer
 
 -- Liste des scripts
 local ScriptList = Instance.new("UIListLayout")
@@ -128,6 +176,11 @@ ScriptList.Parent = ScrollFrame
 local Dragging = false
 local DragStart = nil
 local StartPos = nil
+
+-- Variables pour le mode réduit
+local IsMinimized = false
+local MinimizedSize = 40
+local FullSize = {Width = 0, Height = 0}
 
 -- Fonction pour créer un élément de script
 local function CreateScriptItem(scriptData, index)
@@ -147,12 +200,12 @@ local function CreateScriptItem(scriptData, index)
     -- Nom du script
     local ScriptName = Instance.new("TextLabel")
     ScriptName.Name = "ScriptName"
-    ScriptName.Size = UDim2.new(0.65, 0, 1, 0)
+    ScriptName.Size = UDim2.new(0.6, 0, 1, 0)
     ScriptName.Position = UDim2.new(0.05, 0, 0, 0)
     ScriptName.BackgroundTransparency = 1
     ScriptName.Text = scriptData.Name
     ScriptName.TextColor3 = Color3.fromRGB(200, 200, 220)
-    ScriptName.TextSize = 16
+    ScriptName.TextSize = GetAdaptiveFontSize() - 2
     ScriptName.TextXAlignment = Enum.TextXAlignment.Left
     ScriptName.Font = Enum.Font.GothamMedium
     ScriptName.Parent = ItemFrame
@@ -160,14 +213,15 @@ local function CreateScriptItem(scriptData, index)
     -- Bouton exécuter
     local ExecuteButton = Instance.new("TextButton")
     ExecuteButton.Name = "ExecuteButton"
-    ExecuteButton.Size = UDim2.new(0, 80, 0, 35)
-    ExecuteButton.Position = UDim2.new(0.7, 0, 0.5, -17.5)
+    local btnW, btnH = GetAdaptiveButtonSize()
+    ExecuteButton.Size = UDim2.new(0, btnW, 0, btnH)
+    ExecuteButton.Position = UDim2.new(0.7, 0, 0.5, -btnH/2)
     ExecuteButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
     ExecuteButton.BackgroundTransparency = 0.2
     ExecuteButton.BorderSizePixel = 0
     ExecuteButton.Text = "▶ Exécuter"
     ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
-    ExecuteButton.TextSize = 14
+    ExecuteButton.TextSize = GetAdaptiveFontSize() - 4
     ExecuteButton.Font = Enum.Font.GothamBold
     ExecuteButton.Parent = ItemFrame
 
@@ -175,31 +229,33 @@ local function CreateScriptItem(scriptData, index)
     ButtonCorner.CornerRadius = UDim.new(0, 5)
     ButtonCorner.Parent = ExecuteButton
 
-    -- Animation au survol
-    ExecuteButton.MouseEnter:Connect(function()
-        TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
-            BackgroundTransparency = 0.1,
-            BackgroundColor3 = Color3.fromRGB(50, 220, 100)
-        }):Play()
-    end)
+    -- Animation au survol (seulement PC)
+    if not IsMobile then
+        ExecuteButton.MouseEnter:Connect(function()
+            TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
+                BackgroundTransparency = 0.1,
+                BackgroundColor3 = Color3.fromRGB(50, 220, 100)
+            }):Play()
+        end)
 
-    ExecuteButton.MouseLeave:Connect(function()
-        TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
-            BackgroundTransparency = 0.2,
-            BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-        }):Play()
-    end)
+        ExecuteButton.MouseLeave:Connect(function()
+            TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
+                BackgroundTransparency = 0.2,
+                BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+            }):Play()
+        end)
+    end
 
     -- Fonction d'exécution
     ExecuteButton.MouseButton1Click:Connect(function()
         pcall(function()
             -- Animation de clic
             TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
-                Size = UDim2.new(0, 75, 0, 32)
+                Size = UDim2.new(0, btnW-5, 0, btnH-3)
             }):Play()
             wait(0.1)
             TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
-                Size = UDim2.new(0, 80, 0, 35)
+                Size = UDim2.new(0, btnW, 0, btnH)
             }):Play()
 
             -- Exécution du script
@@ -221,7 +277,45 @@ for i, scriptData in ipairs(Scripts) do
 end
 
 -- Mise à jour du CanvasSize
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 63) + 10)
+local function UpdateCanvasSize()
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 63) + 10)
+end
+UpdateCanvasSize()
+
+-- Fonction pour basculer le mode réduit
+local function ToggleMinimize()
+    IsMinimized = not IsMinimized
+    
+    if IsMinimized then
+        -- Sauvegarder la taille actuelle
+        FullSize.Width = MainFrame.Size.X.Offset
+        FullSize.Height = MainFrame.Size.Y.Offset
+        
+        -- Réduire à la barre de titre
+        local targetWidth = math.min(200, MainFrame.Size.X.Offset)
+        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Size = UDim2.new(0, targetWidth, 0, MinimizedSize)
+        }):Play()
+        
+        ContentContainer.Visible = false
+        ToggleButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
+        
+        -- Mettre à jour le titre
+        Title.Text = "📁 Scripts ▼"
+    else
+        -- Restaurer la taille
+        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
+        }):Play()
+        
+        wait(0.3)
+        ContentContainer.Visible = true
+        ToggleButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
+        
+        -- Mettre à jour le titre
+        Title.Text = "📁 Script Executor"
+    end
+end
 
 -- Fonction de déplacement
 local function StartDrag(input)
@@ -253,40 +347,74 @@ TitleBar.InputBegan:Connect(StartDrag)
 TitleBar.InputChanged:Connect(UpdateDrag)
 TitleBar.InputEnded:Connect(EndDrag)
 
+-- Bouton réduire/agrandir
+ToggleButton.MouseButton1Click:Connect(ToggleMinimize)
+
 -- Bouton fermer
 CloseButton.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
 end)
 
--- Bouton hide/show
-local IsHidden = false
-HideButton.MouseButton1Click:Connect(function()
-    IsHidden = not IsHidden
-    MainFrame.Visible = not IsHidden
-    if IsHidden then
-        HideButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
-    else
-        HideButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
-    end
-end)
-
 -- Rendre la GUI visible au démarrage
 MainFrame.Visible = true
 
--- Raccourci clavier pour afficher/masquer (Ctrl + H)
+-- Raccourci clavier pour afficher/masquer (Ctrl + H) et réduire (Ctrl + M)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
     if input.KeyCode == Enum.KeyCode.H and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        IsHidden = not IsHidden
-        MainFrame.Visible = not IsHidden
-        if IsHidden then
-            HideButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
-        else
-            HideButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
+        MainFrame.Visible = not MainFrame.Visible
+    end
+    
+    if input.KeyCode == Enum.KeyCode.M and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        ToggleMinimize()
+    end
+end)
+
+-- Adaptation au redimensionnement de l'écran
+RunService.RenderStepped:Connect(function()
+    local currentSize = workspace.CurrentCamera.ViewportSize
+    local isNowSmall = currentSize.X < 600
+    
+    if isNowSmall ~= IsSmallScreen then
+        IsSmallScreen = isNowSmall
+        IsMobile = UserInputService.TouchEnabled
+        
+        -- Mettre à jour les dimensions
+        UpdateMainFrameSize()
+        
+        -- Mettre à jour les tailles de police
+        local newFontSize = GetAdaptiveFontSize()
+        Title.TextSize = newFontSize
+        
+        -- Mettre à jour les boutons
+        for _, item in pairs(ScrollFrame:GetChildren()) do
+            if item:IsA("Frame") and item.Name:match("ScriptItem") then
+                for _, child in pairs(item:GetChildren()) do
+                    if child:IsA("TextButton") and child.Name == "ExecuteButton" then
+                        local btnW, btnH = GetAdaptiveButtonSize()
+                        child.Size = UDim2.new(0, btnW, 0, btnH)
+                        child.Position = UDim2.new(0.7, 0, 0.5, -btnH/2)
+                        child.TextSize = GetAdaptiveFontSize() - 4
+                    elseif child:IsA("TextLabel") and child.Name == "ScriptName" then
+                        child.TextSize = GetAdaptiveFontSize() - 2
+                    end
+                end
+            end
         end
     end
 end)
 
+-- Raccourci pour fermer avec Échap
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.Escape and MainFrame.Visible then
+        MainFrame.Visible = false
+    end
+end)
+
 print("Script Executor GUI chargé avec succès!")
-print("Appuyez sur Ctrl + H pour afficher/masquer la fenêtre")
+print("Ctrl + H : Afficher/Masquer")
+print("Ctrl + M : Réduire/Agrandir")
+print("Échap : Fermer")
