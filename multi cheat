@@ -6,10 +6,10 @@
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
 -- Configuration des scripts (à modifier selon vos besoins)
 local Scripts = {
@@ -18,17 +18,14 @@ local Scripts = {
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Make%20someone%20fly"
     },
     {
-        Name = "Script 2",
-        Url = "https://raw.githubusercontent.com/votre-repo/script2.lua"
+        Name = "ESP",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/ESP"
     },
-    {
-        Name = "Script 3",
-        Url = "https://raw.githubusercontent.com/votre-repo/script3.lua"
-    },
-    {
-        Name = "Script 4",
-        Url = "https://raw.githubusercontent.com/votre-repo/script4.lua"
-    }
+    -- Ajoutez vos autres scripts ici
+    -- {
+    --     Name = "Mon Script",
+    --     Url = "https://raw.githubusercontent.com/votre-repo/script.lua"
+    -- }
 }
 
 -- Création de la ScreenGui
@@ -182,6 +179,53 @@ local IsMinimized = false
 local MinimizedSize = 40
 local FullSize = {Width = 0, Height = 0}
 
+-- Fonction pour exécuter un script
+local function ExecuteScript(url, scriptName)
+    if not url or url == "" then
+        warn("❌ URL vide pour: " .. scriptName)
+        return
+    end
+    
+    -- Si l'URL commence par "loadstring", on l'exécute directement
+    if string.sub(url, 1, 10) == "loadstring" then
+        local success, result = pcall(function()
+            return loadstring(url)()
+        end)
+        if success then
+            print("✅ Script exécuté: " .. scriptName)
+        else
+            warn("❌ Erreur d'exécution du script: " .. scriptName .. " - " .. result)
+        end
+        return
+    end
+    
+    -- Sinon on essaie de télécharger
+    local success, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if not success then
+        warn("❌ Erreur de téléchargement: " .. scriptName)
+        return
+    end
+    
+    local func, err = loadstring(response)
+    if not func then
+        warn("❌ Erreur de compilation: " .. scriptName .. " - " .. err)
+        return
+    end
+    
+    local execSuccess, execErr = pcall(function()
+        func()
+    end)
+    
+    if execSuccess then
+        print("✅ Script exécuté avec succès: " .. scriptName)
+    else
+        warn("❌ Erreur d'exécution: " .. scriptName .. " - " .. execErr)
+    end
+end
+
 -- Fonction pour créer un élément de script
 local function CreateScriptItem(scriptData, index)
     local ItemFrame = Instance.new("Frame")
@@ -248,24 +292,27 @@ local function CreateScriptItem(scriptData, index)
 
     -- Fonction d'exécution
     ExecuteButton.MouseButton1Click:Connect(function()
-        pcall(function()
-            -- Animation de clic
-            TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
-                Size = UDim2.new(0, btnW-5, 0, btnH-3)
-            }):Play()
-            wait(0.1)
-            TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
-                Size = UDim2.new(0, btnW, 0, btnH)
-            }):Play()
+        -- Animation de clic
+        TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, btnW-5, 0, btnH-3)
+        }):Play()
+        task.wait(0.1)
+        TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, btnW, 0, btnH)
+        }):Play()
 
-            -- Exécution du script
-            if scriptData.Url and scriptData.Url ~= "" then
-                loadstring(game:HttpGet(scriptData.Url))()
-                print("Script exécuté: " .. scriptData.Name)
-            else
-                warn("URL du script vide pour: " .. scriptData.Name)
-            end
-        end)
+        -- Changer temporairement le texte
+        local oldText = ExecuteButton.Text
+        ExecuteButton.Text = "⏳ Chargement..."
+        ExecuteButton.TextColor3 = Color3.fromRGB(255, 200, 100)
+        
+        -- Exécuter le script
+        ExecuteScript(scriptData.Url, scriptData.Name)
+        
+        -- Restaurer le texte
+        task.wait(0.5)
+        ExecuteButton.Text = oldText
+        ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
     end)
 
     return ItemFrame
@@ -287,11 +334,9 @@ local function ToggleMinimize()
     IsMinimized = not IsMinimized
     
     if IsMinimized then
-        -- Sauvegarder la taille actuelle
         FullSize.Width = MainFrame.Size.X.Offset
         FullSize.Height = MainFrame.Size.Y.Offset
         
-        -- Réduire à la barre de titre
         local targetWidth = math.min(200, MainFrame.Size.X.Offset)
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
             Size = UDim2.new(0, targetWidth, 0, MinimizedSize)
@@ -299,20 +344,15 @@ local function ToggleMinimize()
         
         ContentContainer.Visible = false
         ToggleButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
-        
-        -- Mettre à jour le titre
         Title.Text = "📁 Scripts ▼"
     else
-        -- Restaurer la taille
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
             Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
         }):Play()
         
-        wait(0.3)
+        task.wait(0.3)
         ContentContainer.Visible = true
         ToggleButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
-        
-        -- Mettre à jour le titre
         Title.Text = "📁 Script Executor"
     end
 end
@@ -380,14 +420,11 @@ RunService.RenderStepped:Connect(function()
         IsSmallScreen = isNowSmall
         IsMobile = UserInputService.TouchEnabled
         
-        -- Mettre à jour les dimensions
         UpdateMainFrameSize()
         
-        -- Mettre à jour les tailles de police
         local newFontSize = GetAdaptiveFontSize()
         Title.TextSize = newFontSize
         
-        -- Mettre à jour les boutons
         for _, item in pairs(ScrollFrame:GetChildren()) do
             if item:IsA("Frame") and item.Name:match("ScriptItem") then
                 for _, child in pairs(item:GetChildren()) do
@@ -414,7 +451,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
-print("Script Executor GUI chargé avec succès!")
+print("✅ Script Executor GUI chargé avec succès!")
 print("Ctrl + H : Afficher/Masquer")
 print("Ctrl + M : Réduire/Agrandir")
 print("Échap : Fermer")
