@@ -119,15 +119,38 @@ Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
 
--- Bouton fermer (cache la fenêtre)
-local CloseButton = Instance.new("ImageButton")
+-- Bouton fermer (cache la fenêtre) - avec un "X" visible
+local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
 CloseButton.Position = UDim2.new(1, -40, 0, 5)
-CloseButton.BackgroundTransparency = 1
-CloseButton.Image = "rbxassetid://7072718606"
-CloseButton.ImageColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.BackgroundTransparency = 0.3
+CloseButton.BorderSizePixel = 0
+CloseButton.Text = "✕"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 18
+CloseButton.Font = Enum.Font.GothamBold
 CloseButton.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 5)
+CloseCorner.Parent = CloseButton
+
+-- Animation au survol du bouton fermer
+CloseButton.MouseEnter:Connect(function()
+    TweenService:Create(CloseButton, TweenInfo.new(0.2), {
+        BackgroundTransparency = 0.1,
+        BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    }):Play()
+end)
+
+CloseButton.MouseLeave:Connect(function()
+    TweenService:Create(CloseButton, TweenInfo.new(0.2), {
+        BackgroundTransparency = 0.3,
+        BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    }):Play()
+end)
 
 -- Conteneur principal (tout sauf la barre de titre)
 local ContentContainer = Instance.new("Frame")
@@ -163,11 +186,11 @@ local StartPos = nil
 -- Variables pour la position sauvegardée
 local SavedPosition = nil
 
--- Bouton flottant pour réouvrir la fenêtre
+-- Bouton flottant pour réouvrir la fenêtre (en haut)
 local FloatButton = Instance.new("ImageButton")
 FloatButton.Name = "FloatButton"
-FloatButton.Size = UDim2.new(0, 55, 0, 55)
-FloatButton.Position = UDim2.new(0.02, 0, 0.5, -27.5)
+FloatButton.Size = UDim2.new(0, 50, 0, 50)
+FloatButton.Position = UDim2.new(0.5, -25, 0.02, 0)
 FloatButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 FloatButton.BackgroundTransparency = 0.2
 FloatButton.BorderSizePixel = 1
@@ -178,31 +201,31 @@ FloatButton.Visible = false
 FloatButton.Parent = ScreenGui
 
 local FloatCorner = Instance.new("UICorner")
-FloatCorner.CornerRadius = UDim.new(0, 10)
+FloatCorner.CornerRadius = UDim.new(0, 12)
 FloatCorner.Parent = FloatButton
 
--- Texte du bouton flottant (pour indiquer "Scripts")
+-- Texte du bouton flottant
 local FloatLabel = Instance.new("TextLabel")
 FloatLabel.Size = UDim2.new(1, 0, 0.6, 0)
 FloatLabel.Position = UDim2.new(0, 0, 0.6, 0)
 FloatLabel.BackgroundTransparency = 1
 FloatLabel.Text = "📁"
 FloatLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
-FloatLabel.TextSize = 20
+FloatLabel.TextSize = 18
 FloatLabel.Font = Enum.Font.GothamBold
 FloatLabel.Parent = FloatButton
 
 -- Animation du bouton flottant au survol
 FloatButton.MouseEnter:Connect(function()
     TweenService:Create(FloatButton, TweenInfo.new(0.2), {
-        Size = UDim2.new(0, 60, 0, 60),
+        Size = UDim2.new(0, 55, 0, 55),
         BackgroundTransparency = 0.05
     }):Play()
 end)
 
 FloatButton.MouseLeave:Connect(function()
     TweenService:Create(FloatButton, TweenInfo.new(0.2), {
-        Size = UDim2.new(0, 55, 0, 55),
+        Size = UDim2.new(0, 50, 0, 50),
         BackgroundTransparency = 0.2
     }):Play()
 end)
@@ -343,7 +366,6 @@ local function ShowMainFrame()
     MainFrame.Visible = true
     FloatButton.Visible = false
     
-    -- Restaurer la position sauvegardée
     if SavedPosition then
         MainFrame.Position = SavedPosition
     end
@@ -351,18 +373,17 @@ end
 
 -- Fonction pour cacher la fenêtre
 local function HideMainFrame()
-    -- Sauvegarder la position actuelle
     SavedPosition = MainFrame.Position
     
     MainFrame.Visible = false
     FloatButton.Visible = true
     
-    -- Animation d'apparition du bouton flottant
-    FloatButton.Size = UDim2.new(0, 40, 0, 40)
-    FloatButton.Position = UDim2.new(0.02, 0, 0.5, -20)
+    -- Animation d'apparition du bouton flottant en haut
+    FloatButton.Size = UDim2.new(0, 35, 0, 35)
+    FloatButton.Position = UDim2.new(0.5, -17.5, 0.02, 0)
     TweenService:Create(FloatButton, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-        Size = UDim2.new(0, 55, 0, 55),
-        Position = UDim2.new(0.02, 0, 0.5, -27.5)
+        Size = UDim2.new(0, 50, 0, 50),
+        Position = UDim2.new(0.5, -25, 0.02, 0)
     }):Play()
 end
 
@@ -427,9 +448,8 @@ RunService.RenderStepped:Connect(function()
         IsSmallScreen = isNowSmall
         IsMobile = UserInputService.TouchEnabled
         
-        -- Mettre à jour la position du bouton flottant si la fenêtre est cachée
         if FloatButton.Visible then
-            FloatButton.Position = UDim2.new(0.02, 0, 0.5, -27.5)
+            FloatButton.Position = UDim2.new(0.5, -25, 0.02, 0)
         end
         
         UpdateMainFrameSize()
@@ -454,35 +474,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Rendre le bouton flottant déplaçable
-local FloatDragging = false
-local FloatDragStart = nil
-local FloatStartPos = nil
-
-FloatButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        FloatDragging = true
-        FloatDragStart = input.Position
-        FloatStartPos = FloatButton.Position
-    end
-end)
-
-FloatButton.InputChanged:Connect(function(input)
-    if FloatDragging then
-        local delta = input.Position - FloatDragStart
-        FloatButton.Position = UDim2.new(
-            FloatStartPos.X.Scale,
-            FloatStartPos.X.Offset + delta.X,
-            FloatStartPos.Y.Scale,
-            FloatStartPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
-FloatButton.InputEnded:Connect(function()
-    FloatDragging = false
-end)
-
 print("✅ Script Executor chargé!")
-print("📌 Cliquez sur la flèche pour réduire")
-print("📌 Cliquez sur 📁 pour réouvrir")
