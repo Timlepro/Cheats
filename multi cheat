@@ -15,7 +15,7 @@ local RunService = game:GetService("RunService")
 local Scripts = {
     {
         Name = "Make Someone Fly",
-        Url = "loadstring(game:HttpGet("https://raw.githubusercontent.com/Timlepro/Cheats/main/Make%20someone%20fly"))()"
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Make%20someone%20fly"
     },
     {
         Name = "Script 2",
