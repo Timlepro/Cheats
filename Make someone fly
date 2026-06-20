@@ -349,7 +349,7 @@ local function CreatePlayerItem(player, index)
             TweenService:Create(TeleportButton, TweenInfo.new(0.1), {
                 Size = UDim2.new(0, btnW-5, 0, btnH-3)
             }):Play()
-            wait(0.1)
+            task.wait(0.1)
             TweenService:Create(TeleportButton, TweenInfo.new(0.1), {
                 Size = UDim2.new(0, btnW, 0, btnH)
             }):Play()
@@ -408,26 +408,29 @@ end
 UpdatePlayerList()
 
 -- Mettre à jour la liste quand des joueurs rejoignent/quittent
-Players.PlayerAdded:Connect(function()
+Players.PlayerAdded:Connect(function(newPlayer)
+    -- NE PAS arrêter la téléportation quand un joueur rejoint
     UpdatePlayerList()
 end)
 
-Players.PlayerRemoving:Connect(function()
+Players.PlayerRemoving:Connect(function(player)
     -- Si le joueur cible quitte, arrêter la téléportation
-    if InfiniteTeleport.Active and InfiniteTeleport.TargetPlayer then
+    if InfiniteTeleport.Active and InfiniteTeleport.TargetPlayer == player then
         StopInfiniteTeleport()
     end
     UpdatePlayerList()
 end)
 
--- Fonction pour basculer le mode réduit
+-- Fonction pour basculer le mode réduit (comme dans l'exemple)
 local function ToggleMinimize()
     IsMinimized = not IsMinimized
     
     if IsMinimized then
+        -- Sauvegarder la taille actuelle
         FullSize.Width = MainFrame.Size.X.Offset
         FullSize.Height = MainFrame.Size.Y.Offset
         
+        -- Réduire à la barre de titre
         local targetWidth = math.min(200, MainFrame.Size.X.Offset)
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
             Size = UDim2.new(0, targetWidth, 0, MinimizedSize)
@@ -437,11 +440,12 @@ local function ToggleMinimize()
         ToggleButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
         Title.Text = "👥 Joueurs ▼"
     else
+        -- Restaurer la taille
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
             Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
         }):Play()
         
-        wait(0.3)
+        task.wait(0.3)
         ContentContainer.Visible = true
         ToggleButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
         Title.Text = "👥 Joueurs Connectés"
@@ -478,41 +482,20 @@ TitleBar.InputBegan:Connect(StartDrag)
 TitleBar.InputChanged:Connect(UpdateDrag)
 TitleBar.InputEnded:Connect(EndDrag)
 
--- Boutons
+-- Bouton réduire/agrandir
 ToggleButton.MouseButton1Click:Connect(ToggleMinimize)
 
+-- Bouton fermer
 CloseButton.MouseButton1Click:Connect(function()
     -- Arrêter la téléportation si active
     if InfiniteTeleport.Active then
         StopInfiniteTeleport()
     end
     MainFrame.Visible = false
-    ScreenGui:Destroy()
 end)
 
 -- Rendre la GUI visible au démarrage
 MainFrame.Visible = true
-
--- Raccourcis clavier
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.H and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        MainFrame.Visible = not MainFrame.Visible
-    end
-    
-    if input.KeyCode == Enum.KeyCode.M and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        ToggleMinimize()
-    end
-    
-    if input.KeyCode == Enum.KeyCode.Escape and MainFrame.Visible then
-        if InfiniteTeleport.Active then
-            StopInfiniteTeleport()
-        end
-        MainFrame.Visible = false
-        ScreenGui:Destroy()
-    end
-end)
 
 -- Adaptation au redimensionnement de l'écran
 RunService.RenderStepped:Connect(function()
@@ -545,7 +528,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("Player Teleport GUI chargé avec succès!")
-print("Ctrl + H : Afficher/Masquer")
-print("Ctrl + M : Réduire/Agrandir")
-print("Échap : Fermer et arrêter la téléportation")
+print("✅ Player Teleport GUI chargé avec succès!")
