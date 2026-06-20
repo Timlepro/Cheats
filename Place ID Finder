@@ -1,12 +1,5 @@
--- Script pour Delta Executor - Récupérer et copier l'ID de la place
-
--- Récupérer l'ID de la place
 local placeId = game.PlaceId
-
--- Afficher dans la console
 print("🔍 ID de la place : " .. placeId)
-
--- Copier dans le presse-papiers (méthode Delta)
 if setclipboard then
     setclipboard(tostring(placeId))
     print("✅ ID copié dans le presse-papiers !")
@@ -16,15 +9,11 @@ elseif toclipboard then
 else
     print("⚠️  Fonction de copie non disponible, essayez de copier manuellement.")
 end
-
--- Afficher un message dans le jeu (optionnel)
 game.StarterGui:SetCore("SendNotification", {
     Title = "Place ID",
     Text = "ID: " .. placeId .. " (copié !)",
     Duration = 3
 })
-
--- Afficher également des infos supplémentaires
 print("📌 Nom du jeu : " .. game.Name)
 print("📌 Job ID : " .. game.JobId)
 print("📌 Place ID : " .. placeId)
