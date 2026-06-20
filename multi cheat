@@ -1,6 +1,6 @@
 --[[
     Script UI Mobile/PC - Popup déplaçable avec exécution de scripts
-    Version avec mode réduit et adaptative
+    Version avec bouton flottant pour réouvrir
     À mettre dans un LocalScript dans StarterPlayerScripts
 ]]
 
@@ -9,7 +9,6 @@ local LocalPlayer = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
 
 -- Configuration des scripts (à modifier selon vos besoins)
 local Scripts = {
@@ -21,11 +20,6 @@ local Scripts = {
         Name = "ESP",
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/ESP"
     },
-    -- Ajoutez vos autres scripts ici
-    -- {
-    --     Name = "Mon Script",
-    --     Url = "https://raw.githubusercontent.com/votre-repo/script.lua"
-    -- }
 }
 
 -- Création de la ScreenGui
@@ -33,6 +27,7 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ScriptExecutorGUI"
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Variables pour l'adaptation mobile
 local IsMobile = UserInputService.TouchEnabled
@@ -75,6 +70,7 @@ MainFrame.BorderSizePixel = 1
 MainFrame.BorderColor3 = Color3.fromRGB(60, 60, 70)
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
+MainFrame.Visible = true
 
 -- Appliquer les dimensions adaptatives
 local function UpdateMainFrameSize()
@@ -123,17 +119,7 @@ Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
 
--- Bouton réduire/agrandir
-local ToggleButton = Instance.new("ImageButton")
-ToggleButton.Name = "ToggleButton"
-ToggleButton.Size = UDim2.new(0, 30, 0, 30)
-ToggleButton.Position = UDim2.new(1, -80, 0, 5)
-ToggleButton.BackgroundTransparency = 1
-ToggleButton.Image = "rbxassetid://7072718629"
-ToggleButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
-ToggleButton.Parent = TitleBar
-
--- Bouton fermer
+-- Bouton fermer (cache la fenêtre)
 local CloseButton = Instance.new("ImageButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
@@ -174,56 +160,82 @@ local Dragging = false
 local DragStart = nil
 local StartPos = nil
 
--- Variables pour le mode réduit
-local IsMinimized = false
-local MinimizedSize = 40
-local FullSize = {Width = 0, Height = 0}
+-- Variables pour la position sauvegardée
+local SavedPosition = nil
+
+-- Bouton flottant pour réouvrir la fenêtre
+local FloatButton = Instance.new("ImageButton")
+FloatButton.Name = "FloatButton"
+FloatButton.Size = UDim2.new(0, 55, 0, 55)
+FloatButton.Position = UDim2.new(0.02, 0, 0.5, -27.5)
+FloatButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+FloatButton.BackgroundTransparency = 0.2
+FloatButton.BorderSizePixel = 1
+FloatButton.BorderColor3 = Color3.fromRGB(60, 60, 70)
+FloatButton.Image = "rbxassetid://7072718680"
+FloatButton.ImageColor3 = Color3.fromRGB(200, 200, 220)
+FloatButton.Visible = false
+FloatButton.Parent = ScreenGui
+
+local FloatCorner = Instance.new("UICorner")
+FloatCorner.CornerRadius = UDim.new(0, 10)
+FloatCorner.Parent = FloatButton
+
+-- Texte du bouton flottant (pour indiquer "Scripts")
+local FloatLabel = Instance.new("TextLabel")
+FloatLabel.Size = UDim2.new(1, 0, 0.6, 0)
+FloatLabel.Position = UDim2.new(0, 0, 0.6, 0)
+FloatLabel.BackgroundTransparency = 1
+FloatLabel.Text = "📁"
+FloatLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+FloatLabel.TextSize = 20
+FloatLabel.Font = Enum.Font.GothamBold
+FloatLabel.Parent = FloatButton
+
+-- Animation du bouton flottant au survol
+FloatButton.MouseEnter:Connect(function()
+    TweenService:Create(FloatButton, TweenInfo.new(0.2), {
+        Size = UDim2.new(0, 60, 0, 60),
+        BackgroundTransparency = 0.05
+    }):Play()
+end)
+
+FloatButton.MouseLeave:Connect(function()
+    TweenService:Create(FloatButton, TweenInfo.new(0.2), {
+        Size = UDim2.new(0, 55, 0, 55),
+        BackgroundTransparency = 0.2
+    }):Play()
+end)
 
 -- Fonction pour exécuter un script
 local function ExecuteScript(url, scriptName)
     if not url or url == "" then
-        warn("❌ URL vide pour: " .. scriptName)
         return
     end
     
-    -- Si l'URL commence par "loadstring", on l'exécute directement
     if string.sub(url, 1, 10) == "loadstring" then
-        local success, result = pcall(function()
-            return loadstring(url)()
+        pcall(function()
+            loadstring(url)()
         end)
-        if success then
-            print("✅ Script exécuté: " .. scriptName)
-        else
-            warn("❌ Erreur d'exécution du script: " .. scriptName .. " - " .. result)
-        end
         return
     end
     
-    -- Sinon on essaie de télécharger
     local success, response = pcall(function()
         return game:HttpGet(url)
     end)
     
     if not success then
-        warn("❌ Erreur de téléchargement: " .. scriptName)
         return
     end
     
     local func, err = loadstring(response)
     if not func then
-        warn("❌ Erreur de compilation: " .. scriptName .. " - " .. err)
         return
     end
     
-    local execSuccess, execErr = pcall(function()
+    pcall(function()
         func()
     end)
-    
-    if execSuccess then
-        print("✅ Script exécuté avec succès: " .. scriptName)
-    else
-        warn("❌ Erreur d'exécution: " .. scriptName .. " - " .. execErr)
-    end
 end
 
 -- Fonction pour créer un élément de script
@@ -241,7 +253,6 @@ local function CreateScriptItem(scriptData, index)
     ItemCorner.CornerRadius = UDim.new(0, 6)
     ItemCorner.Parent = ItemFrame
 
-    -- Nom du script
     local ScriptName = Instance.new("TextLabel")
     ScriptName.Name = "ScriptName"
     ScriptName.Size = UDim2.new(0.6, 0, 1, 0)
@@ -254,7 +265,6 @@ local function CreateScriptItem(scriptData, index)
     ScriptName.Font = Enum.Font.GothamMedium
     ScriptName.Parent = ItemFrame
 
-    -- Bouton exécuter
     local ExecuteButton = Instance.new("TextButton")
     ExecuteButton.Name = "ExecuteButton"
     local btnW, btnH = GetAdaptiveButtonSize()
@@ -268,12 +278,12 @@ local function CreateScriptItem(scriptData, index)
     ExecuteButton.TextSize = GetAdaptiveFontSize() - 4
     ExecuteButton.Font = Enum.Font.GothamBold
     ExecuteButton.Parent = ItemFrame
+    ExecuteButton.AutoButtonColor = false
 
     local ButtonCorner = Instance.new("UICorner")
     ButtonCorner.CornerRadius = UDim.new(0, 5)
     ButtonCorner.Parent = ExecuteButton
 
-    -- Animation au survol (seulement PC)
     if not IsMobile then
         ExecuteButton.MouseEnter:Connect(function()
             TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
@@ -290,9 +300,11 @@ local function CreateScriptItem(scriptData, index)
         end)
     end
 
-    -- Fonction d'exécution
     ExecuteButton.MouseButton1Click:Connect(function()
-        -- Animation de clic
+        if ExecuteButton.Text == "⏳..." then
+            return
+        end
+        
         TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
             Size = UDim2.new(0, btnW-5, 0, btnH-3)
         }):Play()
@@ -301,16 +313,13 @@ local function CreateScriptItem(scriptData, index)
             Size = UDim2.new(0, btnW, 0, btnH)
         }):Play()
 
-        -- Changer temporairement le texte
         local oldText = ExecuteButton.Text
-        ExecuteButton.Text = "⏳ Chargement..."
+        ExecuteButton.Text = "⏳..."
         ExecuteButton.TextColor3 = Color3.fromRGB(255, 200, 100)
         
-        -- Exécuter le script
         ExecuteScript(scriptData.Url, scriptData.Name)
         
-        -- Restaurer le texte
-        task.wait(0.5)
+        task.wait(0.3)
         ExecuteButton.Text = oldText
         ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
     end)
@@ -329,32 +338,32 @@ local function UpdateCanvasSize()
 end
 UpdateCanvasSize()
 
--- Fonction pour basculer le mode réduit
-local function ToggleMinimize()
-    IsMinimized = not IsMinimized
+-- Fonction pour afficher la fenêtre
+local function ShowMainFrame()
+    MainFrame.Visible = true
+    FloatButton.Visible = false
     
-    if IsMinimized then
-        FullSize.Width = MainFrame.Size.X.Offset
-        FullSize.Height = MainFrame.Size.Y.Offset
-        
-        local targetWidth = math.min(200, MainFrame.Size.X.Offset)
-        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-            Size = UDim2.new(0, targetWidth, 0, MinimizedSize)
-        }):Play()
-        
-        ContentContainer.Visible = false
-        ToggleButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
-        Title.Text = "📁 Scripts ▼"
-    else
-        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-            Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
-        }):Play()
-        
-        task.wait(0.3)
-        ContentContainer.Visible = true
-        ToggleButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
-        Title.Text = "📁 Script Executor"
+    -- Restaurer la position sauvegardée
+    if SavedPosition then
+        MainFrame.Position = SavedPosition
     end
+end
+
+-- Fonction pour cacher la fenêtre
+local function HideMainFrame()
+    -- Sauvegarder la position actuelle
+    SavedPosition = MainFrame.Position
+    
+    MainFrame.Visible = false
+    FloatButton.Visible = true
+    
+    -- Animation d'apparition du bouton flottant
+    FloatButton.Size = UDim2.new(0, 40, 0, 40)
+    FloatButton.Position = UDim2.new(0.02, 0, 0.5, -20)
+    TweenService:Create(FloatButton, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
+        Size = UDim2.new(0, 55, 0, 55),
+        Position = UDim2.new(0.02, 0, 0.5, -27.5)
+    }):Play()
 end
 
 -- Fonction de déplacement
@@ -387,27 +396,25 @@ TitleBar.InputBegan:Connect(StartDrag)
 TitleBar.InputChanged:Connect(UpdateDrag)
 TitleBar.InputEnded:Connect(EndDrag)
 
--- Bouton réduire/agrandir
-ToggleButton.MouseButton1Click:Connect(ToggleMinimize)
+-- Bouton fermer (cache la fenêtre)
+CloseButton.MouseButton1Click:Connect(HideMainFrame)
 
--- Bouton fermer
-CloseButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = false
-end)
+-- Bouton flottant pour réouvrir
+FloatButton.MouseButton1Click:Connect(ShowMainFrame)
 
--- Rendre la GUI visible au démarrage
-MainFrame.Visible = true
+-- Rendre la fenêtre visible au démarrage
+ShowMainFrame()
 
--- Raccourci clavier pour afficher/masquer (Ctrl + H) et réduire (Ctrl + M)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.H and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        MainFrame.Visible = not MainFrame.Visible
-    end
-    
-    if input.KeyCode == Enum.KeyCode.M and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        ToggleMinimize()
+-- Fonction globale pour réouvrir (si besoin)
+_G.ShowScriptExecutor = ShowMainFrame
+
+-- Garder la GUI en vie
+ScreenGui.AncestryChanged:Connect(function()
+    if not ScreenGui.Parent then
+        task.wait(1)
+        if not ScreenGui.Parent then
+            ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+        end
     end
 end)
 
@@ -419,6 +426,11 @@ RunService.RenderStepped:Connect(function()
     if isNowSmall ~= IsSmallScreen then
         IsSmallScreen = isNowSmall
         IsMobile = UserInputService.TouchEnabled
+        
+        -- Mettre à jour la position du bouton flottant si la fenêtre est cachée
+        if FloatButton.Visible then
+            FloatButton.Position = UDim2.new(0.02, 0, 0.5, -27.5)
+        end
         
         UpdateMainFrameSize()
         
@@ -442,16 +454,35 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Raccourci pour fermer avec Échap
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.Escape and MainFrame.Visible then
-        MainFrame.Visible = false
+-- Rendre le bouton flottant déplaçable
+local FloatDragging = false
+local FloatDragStart = nil
+local FloatStartPos = nil
+
+FloatButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        FloatDragging = true
+        FloatDragStart = input.Position
+        FloatStartPos = FloatButton.Position
     end
 end)
 
-print("✅ Script Executor GUI chargé avec succès!")
-print("Ctrl + H : Afficher/Masquer")
-print("Ctrl + M : Réduire/Agrandir")
-print("Échap : Fermer")
+FloatButton.InputChanged:Connect(function(input)
+    if FloatDragging then
+        local delta = input.Position - FloatDragStart
+        FloatButton.Position = UDim2.new(
+            FloatStartPos.X.Scale,
+            FloatStartPos.X.Offset + delta.X,
+            FloatStartPos.Y.Scale,
+            FloatStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+FloatButton.InputEnded:Connect(function()
+    FloatDragging = false
+end)
+
+print("✅ Script Executor chargé!")
+print("📌 Cliquez sur la flèche pour réduire")
+print("📌 Cliquez sur 📁 pour réouvrir")
