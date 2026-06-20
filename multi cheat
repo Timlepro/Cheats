@@ -1,0 +1,292 @@
+--[[
+    Script UI Mobile/PC - Popup déplaçable avec exécution de scripts
+    À mettre dans un LocalScript dans StarterPlayerScripts
+]]
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- Configuration des scripts (à modifier selon vos besoins)
+local Scripts = {
+    {
+        Name = "Script 1",
+        Url = "https://raw.githubusercontent.com/votre-repo/script1.lua"
+    },
+    {
+        Name = "Script 2",
+        Url = "https://raw.githubusercontent.com/votre-repo/script2.lua"
+    },
+    {
+        Name = "Script 3",
+        Url = "https://raw.githubusercontent.com/votre-repo/script3.lua"
+    },
+    {
+        Name = "Script 4",
+        Url = "https://raw.githubusercontent.com/votre-repo/script4.lua"
+    }
+}
+
+-- Création de la ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ScriptExecutorGUI"
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+
+-- Fenêtre principale
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 400, 0, 500)
+MainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainFrame.BackgroundTransparency = 0.95
+MainFrame.BorderSizePixel = 1
+MainFrame.BorderColor3 = Color3.fromRGB(60, 60, 70)
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+
+-- Fond avec effet glass
+local GlassEffect = Instance.new("Frame")
+GlassEffect.Name = "GlassEffect"
+GlassEffect.Size = UDim2.new(1, 0, 1, 0)
+GlassEffect.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+GlassEffect.BackgroundTransparency = 0.3
+GlassEffect.BorderSizePixel = 0
+GlassEffect.Parent = MainFrame
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = MainFrame
+
+-- Barre de titre (pour déplacer)
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+TitleBar.BackgroundTransparency = 0.5
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = TitleBar
+
+-- Titre
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(0.7, 0, 1, 0)
+Title.Position = UDim2.new(0.05, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "📁 Script Executor"
+Title.TextColor3 = Color3.fromRGB(220, 220, 230)
+Title.TextSize = 18
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Font = Enum.Font.GothamBold
+Title.Parent = TitleBar
+
+-- Bouton fermer
+local CloseButton = Instance.new("ImageButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -40, 0, 5)
+CloseButton.BackgroundTransparency = 1
+CloseButton.Image = "rbxassetid://7072718606"
+CloseButton.ImageColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.Parent = TitleBar
+
+-- Bouton réduire (hide/show)
+local HideButton = Instance.new("ImageButton")
+HideButton.Name = "HideButton"
+HideButton.Size = UDim2.new(0, 30, 0, 30)
+HideButton.Position = UDim2.new(1, -80, 0, 5)
+HideButton.BackgroundTransparency = 1
+HideButton.Image = "rbxassetid://7072718629"
+HideButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
+HideButton.Parent = TitleBar
+
+-- ScrollView pour la liste des scripts
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "ScrollFrame"
+ScrollFrame.Size = UDim2.new(0.95, 0, 0.8, 0)
+ScrollFrame.Position = UDim2.new(0.025, 0, 0.1, 0)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.ScrollBarThickness = 6
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
+ScrollFrame.Parent = MainFrame
+
+-- Liste des scripts
+local ScriptList = Instance.new("UIListLayout")
+ScriptList.Padding = UDim.new(0, 8)
+ScriptList.SortOrder = Enum.SortOrder.LayoutOrder
+ScriptList.Parent = ScrollFrame
+
+-- Variables pour le déplacement
+local Dragging = false
+local DragStart = nil
+local StartPos = nil
+
+-- Fonction pour créer un élément de script
+local function CreateScriptItem(scriptData, index)
+    local ItemFrame = Instance.new("Frame")
+    ItemFrame.Name = "ScriptItem_" .. index
+    ItemFrame.Size = UDim2.new(1, -10, 0, 55)
+    ItemFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    ItemFrame.BackgroundTransparency = 0.3
+    ItemFrame.BorderSizePixel = 1
+    ItemFrame.BorderColor3 = Color3.fromRGB(50, 50, 65)
+    ItemFrame.Parent = ScrollFrame
+
+    local ItemCorner = Instance.new("UICorner")
+    ItemCorner.CornerRadius = UDim.new(0, 6)
+    ItemCorner.Parent = ItemFrame
+
+    -- Nom du script
+    local ScriptName = Instance.new("TextLabel")
+    ScriptName.Name = "ScriptName"
+    ScriptName.Size = UDim2.new(0.65, 0, 1, 0)
+    ScriptName.Position = UDim2.new(0.05, 0, 0, 0)
+    ScriptName.BackgroundTransparency = 1
+    ScriptName.Text = scriptData.Name
+    ScriptName.TextColor3 = Color3.fromRGB(200, 200, 220)
+    ScriptName.TextSize = 16
+    ScriptName.TextXAlignment = Enum.TextXAlignment.Left
+    ScriptName.Font = Enum.Font.GothamMedium
+    ScriptName.Parent = ItemFrame
+
+    -- Bouton exécuter
+    local ExecuteButton = Instance.new("TextButton")
+    ExecuteButton.Name = "ExecuteButton"
+    ExecuteButton.Size = UDim2.new(0, 80, 0, 35)
+    ExecuteButton.Position = UDim2.new(0.7, 0, 0.5, -17.5)
+    ExecuteButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+    ExecuteButton.BackgroundTransparency = 0.2
+    ExecuteButton.BorderSizePixel = 0
+    ExecuteButton.Text = "▶ Exécuter"
+    ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
+    ExecuteButton.TextSize = 14
+    ExecuteButton.Font = Enum.Font.GothamBold
+    ExecuteButton.Parent = ItemFrame
+
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 5)
+    ButtonCorner.Parent = ExecuteButton
+
+    -- Animation au survol
+    ExecuteButton.MouseEnter:Connect(function()
+        TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
+            BackgroundTransparency = 0.1,
+            BackgroundColor3 = Color3.fromRGB(50, 220, 100)
+        }):Play()
+    end)
+
+    ExecuteButton.MouseLeave:Connect(function()
+        TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
+            BackgroundTransparency = 0.2,
+            BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+        }):Play()
+    end)
+
+    -- Fonction d'exécution
+    ExecuteButton.MouseButton1Click:Connect(function()
+        pcall(function()
+            -- Animation de clic
+            TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
+                Size = UDim2.new(0, 75, 0, 32)
+            }):Play()
+            wait(0.1)
+            TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
+                Size = UDim2.new(0, 80, 0, 35)
+            }):Play()
+
+            -- Exécution du script
+            if scriptData.Url and scriptData.Url ~= "" then
+                loadstring(game:HttpGet(scriptData.Url))()
+                print("Script exécuté: " .. scriptData.Name)
+            else
+                warn("URL du script vide pour: " .. scriptData.Name)
+            end
+        end)
+    end)
+
+    return ItemFrame
+end
+
+-- Création des éléments de script
+for i, scriptData in ipairs(Scripts) do
+    CreateScriptItem(scriptData, i)
+end
+
+-- Mise à jour du CanvasSize
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 63) + 10)
+
+-- Fonction de déplacement
+local function StartDrag(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        Dragging = true
+        DragStart = input.Position
+        StartPos = MainFrame.Position
+    end
+end
+
+local function UpdateDrag(input)
+    if Dragging then
+        local delta = input.Position - DragStart
+        MainFrame.Position = UDim2.new(
+            StartPos.X.Scale,
+            StartPos.X.Offset + delta.X,
+            StartPos.Y.Scale,
+            StartPos.Y.Offset + delta.Y
+        )
+    end
+end
+
+local function EndDrag()
+    Dragging = false
+end
+
+-- Gestion des événements de déplacement
+TitleBar.InputBegan:Connect(StartDrag)
+TitleBar.InputChanged:Connect(UpdateDrag)
+TitleBar.InputEnded:Connect(EndDrag)
+
+-- Bouton fermer
+CloseButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+end)
+
+-- Bouton hide/show
+local IsHidden = false
+HideButton.MouseButton1Click:Connect(function()
+    IsHidden = not IsHidden
+    MainFrame.Visible = not IsHidden
+    if IsHidden then
+        HideButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        HideButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
+    end
+end)
+
+-- Rendre la GUI visible au démarrage
+MainFrame.Visible = true
+
+-- Raccourci clavier pour afficher/masquer (Ctrl + H)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.H and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        IsHidden = not IsHidden
+        MainFrame.Visible = not IsHidden
+        if IsHidden then
+            HideButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
+        else
+            HideButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
+        end
+    end
+end)
+
+print("Script Executor GUI chargé avec succès!")
+print("Appuyez sur Ctrl + H pour afficher/masquer la fenêtre")
