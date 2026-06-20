@@ -1,6 +1,6 @@
 --[[
     Script UI Mobile/PC - Popup déplaçable avec exécution de scripts
-    Version avec bouton flottant pour réouvrir
+    Version avec Auto-Execute par emplacement et sauvegarde des préférences
     À mettre dans un LocalScript dans StarterPlayerScripts
 ]]
 
@@ -10,17 +10,157 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
--- Configuration des scripts (à modifier selon vos besoins)
+-- Configuration des scripts
 local Scripts = {
     {
         Name = "Make Someone Fly",
-        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Make%20someone%20fly"
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Make%20someone%20fly",
+        AutoExecute = true,
+        PlaceIds = {1234567890, 9876543210}
     },
     {
         Name = "ESP",
-        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/ESP"
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/ESP",
+        AutoExecute = false,
+        PlaceIds = {}
+    },
+    {
+        Name = "Script 3",
+        Url = "https://raw.githubusercontent.com/votre-repo/script3.lua",
+        AutoExecute = true,
+        PlaceIds = {1234567890}
     },
 }
+
+-- ===== GESTION DES PRÉFÉRENCES =====
+local PreferencesFile = "ScriptExecutor_Prefs.txt"
+
+-- Fonction pour sauvegarder les préférences
+local function SavePreferences()
+    local data = {
+        AutoExecuteEnabled = AutoExecuteEnabled,
+        MainFramePosition = {
+            X = MainFrame.Position.X.Scale,
+            XOffset = MainFrame.Position.X.Offset,
+            Y = MainFrame.Position.Y.Scale,
+            YOffset = MainFrame.Position.Y.Offset
+        },
+        FloatButtonPosition = {
+            X = FloatButton.Position.X.Scale,
+            XOffset = FloatButton.Position.X.Offset,
+            Y = FloatButton.Position.Y.Scale,
+            YOffset = FloatButton.Position.Y.Offset
+        },
+        ExecutedScripts = ExecutedScripts,
+        ScriptsConfig = {}
+    }
+    
+    -- Sauvegarder la config de chaque script
+    for i, scriptData in ipairs(Scripts) do
+        data.ScriptsConfig[i] = {
+            AutoExecute = scriptData.AutoExecute,
+            PlaceIds = scriptData.PlaceIds
+        }
+    end
+    
+    -- Convertir en JSON
+    local jsonData = game:GetService("HttpService"):JSONEncode(data)
+    
+    -- Sauvegarder
+    local success, err = pcall(function()
+        writefile(PreferencesFile, jsonData)
+    end)
+    
+    if success then
+        print("✅ Préférences sauvegardées!")
+    else
+        warn("❌ Erreur de sauvegarde: " .. err)
+    end
+end
+
+-- Fonction pour charger les préférences
+local function LoadPreferences()
+    -- Vérifier si le fichier existe
+    local fileExists, _ = pcall(function()
+        return isfile(PreferencesFile)
+    end)
+    
+    if not fileExists then
+        print("📝 Fichier de préférences inexistant, création avec valeurs par défaut...")
+        SavePreferences()
+        return
+    end
+    
+    -- Lire le fichier
+    local success, jsonData = pcall(function()
+        return readfile(PreferencesFile)
+    end)
+    
+    if not success then
+        print("❌ Erreur de lecture du fichier, création d'un nouveau...")
+        SavePreferences()
+        return
+    end
+    
+    -- Décoder le JSON
+    local data = nil
+    local decodeSuccess, decodedData = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(jsonData)
+    end)
+    
+    if not decodeSuccess then
+        print("❌ Erreur de décodage JSON, création d'un nouveau fichier...")
+        SavePreferences()
+        return
+    end
+    
+    data = decodedData
+    
+    -- Appliquer les préférences
+    if data.AutoExecuteEnabled ~= nil then
+        AutoExecuteEnabled = data.AutoExecuteEnabled
+    end
+    
+    if data.MainFramePosition then
+        MainFrame.Position = UDim2.new(
+            data.MainFramePosition.X or 0.5,
+            data.MainFramePosition.XOffset or -200,
+            data.MainFramePosition.Y or 0.5,
+            data.MainFramePosition.YOffset or -250
+        )
+    end
+    
+    if data.FloatButtonPosition then
+        FloatButton.Position = UDim2.new(
+            data.FloatButtonPosition.X or 0.5,
+            data.FloatButtonPosition.XOffset or -25,
+            data.FloatButtonPosition.Y or 0.02,
+            data.FloatButtonPosition.YOffset or 0
+        )
+    end
+    
+    if data.ExecutedScripts then
+        ExecutedScripts = data.ExecutedScripts
+    end
+    
+    -- Appliquer la config des scripts
+    if data.ScriptsConfig then
+        for i, config in pairs(data.ScriptsConfig) do
+            if Scripts[i] then
+                Scripts[i].AutoExecute = config.AutoExecute
+                Scripts[i].PlaceIds = config.PlaceIds or {}
+            end
+        end
+    end
+    
+    print("✅ Préférences chargées avec succès!")
+    print("📌 Auto-Execute: " .. (AutoExecuteEnabled and "ON" or "OFF"))
+end
+
+-- Variables de contrôle
+local AutoExecuteEnabled = true
+local CurrentPlaceId = game.PlaceId
+local ExecutedScripts = {}
 
 -- Création de la ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
@@ -36,12 +176,12 @@ local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
 -- Dimensions adaptatives
 local function GetAdaptiveSize()
     local screenSize = workspace.CurrentCamera.ViewportSize
-    local width = math.min(400, screenSize.X * 0.9)
-    local height = math.min(500, screenSize.Y * 0.85)
+    local width = math.min(420, screenSize.X * 0.9)
+    local height = math.min(550, screenSize.Y * 0.85)
     
     if IsMobile or IsSmallScreen then
-        width = math.min(350, screenSize.X * 0.92)
-        height = math.min(450, screenSize.Y * 0.8)
+        width = math.min(370, screenSize.X * 0.92)
+        height = math.min(500, screenSize.Y * 0.8)
     end
     
     return width, height
@@ -49,16 +189,16 @@ end
 
 local function GetAdaptiveFontSize()
     if IsMobile or IsSmallScreen then
-        return 14
+        return 13
     end
-    return 18
+    return 17
 end
 
 local function GetAdaptiveButtonSize()
     if IsMobile or IsSmallScreen then
-        return 70, 30
+        return 65, 28
     end
-    return 80, 35
+    return 75, 32
 end
 
 -- Fenêtre principale
@@ -76,7 +216,7 @@ MainFrame.Visible = true
 local function UpdateMainFrameSize()
     local width, height = GetAdaptiveSize()
     MainFrame.Size = UDim2.new(0, width, 0, height)
-    MainFrame.Position = UDim2.new(0.5, -width/2, 0.5, -height/2)
+    -- Ne pas repositionner si on a chargé une position
 end
 UpdateMainFrameSize()
 
@@ -93,10 +233,10 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, 10)
 Corner.Parent = MainFrame
 
--- Barre de titre (pour déplacer)
+-- Barre de titre
 local TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.Size = UDim2.new(1, 0, 0, 45)
 TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 TitleBar.BackgroundTransparency = 0.5
 TitleBar.BorderSizePixel = 0
@@ -109,7 +249,7 @@ TitleCorner.Parent = TitleBar
 -- Titre
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.Size = UDim2.new(0.6, 0, 1, 0)
+Title.Size = UDim2.new(0.35, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "📁 Script Executor"
@@ -119,15 +259,35 @@ Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
 
--- Bouton fermer (cache la fenêtre) - avec un "X" visible
+-- Toggle Auto-Execute
+local AutoToggle = Instance.new("TextButton")
+AutoToggle.Name = "AutoToggle"
+AutoToggle.Size = UDim2.new(0, 110, 0, 28)
+AutoToggle.Position = UDim2.new(0.38, 0, 0.5, -14)
+AutoToggle.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+AutoToggle.BackgroundTransparency = 0.2
+AutoToggle.BorderSizePixel = 1
+AutoToggle.BorderColor3 = Color3.fromRGB(40, 180, 80)
+AutoToggle.Text = "✅ Auto: ON"
+AutoToggle.TextColor3 = Color3.fromRGB(180, 255, 200)
+AutoToggle.TextSize = GetAdaptiveFontSize() - 4
+AutoToggle.Font = Enum.Font.GothamBold
+AutoToggle.Parent = TitleBar
+AutoToggle.AutoButtonColor = false
+
+local AutoCorner = Instance.new("UICorner")
+AutoCorner.CornerRadius = UDim.new(0, 5)
+AutoCorner.Parent = AutoToggle
+
+-- Bouton fermer
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
-CloseButton.Position = UDim2.new(1, -40, 0, 5)
+CloseButton.Position = UDim2.new(1, -40, 0, 7)
 CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 CloseButton.BackgroundTransparency = 0.3
 CloseButton.BorderSizePixel = 0
-CloseButton.Text = "X"
+CloseButton.Text = "✕"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
@@ -137,7 +297,6 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 5)
 CloseCorner.Parent = CloseButton
 
--- Animation au survol du bouton fermer
 CloseButton.MouseEnter:Connect(function()
     TweenService:Create(CloseButton, TweenInfo.new(0.2), {
         BackgroundTransparency = 0.1,
@@ -152,15 +311,15 @@ CloseButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- Conteneur principal (tout sauf la barre de titre)
+-- Conteneur principal
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Name = "ContentContainer"
-ContentContainer.Size = UDim2.new(1, 0, 1, -40)
-ContentContainer.Position = UDim2.new(0, 0, 0, 40)
+ContentContainer.Size = UDim2.new(1, 0, 1, -45)
+ContentContainer.Position = UDim2.new(0, 0, 0, 45)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.Parent = MainFrame
 
--- ScrollView pour la liste des scripts
+-- ScrollView
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "ScrollFrame"
 ScrollFrame.Size = UDim2.new(0.95, 0, 0.9, 0)
@@ -182,11 +341,9 @@ ScriptList.Parent = ScrollFrame
 local Dragging = false
 local DragStart = nil
 local StartPos = nil
-
--- Variables pour la position sauvegardée
 local SavedPosition = nil
 
--- Bouton flottant pour réouvrir la fenêtre (en haut)
+-- Bouton flottant
 local FloatButton = Instance.new("ImageButton")
 FloatButton.Name = "FloatButton"
 FloatButton.Size = UDim2.new(0, 50, 0, 50)
@@ -204,7 +361,6 @@ local FloatCorner = Instance.new("UICorner")
 FloatCorner.CornerRadius = UDim.new(0, 12)
 FloatCorner.Parent = FloatButton
 
--- Texte du bouton flottant
 local FloatLabel = Instance.new("TextLabel")
 FloatLabel.Size = UDim2.new(1, 0, 0.6, 0)
 FloatLabel.Position = UDim2.new(0, 0, 0.6, 0)
@@ -215,7 +371,6 @@ FloatLabel.TextSize = 18
 FloatLabel.Font = Enum.Font.GothamBold
 FloatLabel.Parent = FloatButton
 
--- Animation du bouton flottant au survol
 FloatButton.MouseEnter:Connect(function()
     TweenService:Create(FloatButton, TweenInfo.new(0.2), {
         Size = UDim2.new(0, 55, 0, 55),
@@ -233,39 +388,87 @@ end)
 -- Fonction pour exécuter un script
 local function ExecuteScript(url, scriptName)
     if not url or url == "" then
-        return
+        return false
     end
+    
+    local success = false
     
     if string.sub(url, 1, 10) == "loadstring" then
-        pcall(function()
+        success = pcall(function()
             loadstring(url)()
         end)
-        return
+        return success
     end
     
-    local success, response = pcall(function()
+    local httpSuccess, response = pcall(function()
         return game:HttpGet(url)
     end)
     
-    if not success then
-        return
+    if not httpSuccess then
+        return false
     end
     
     local func, err = loadstring(response)
     if not func then
-        return
+        return false
     end
     
-    pcall(function()
+    success = pcall(function()
         func()
     end)
+    
+    return success
+end
+
+-- Fonction pour vérifier si un script doit s'exécuter automatiquement
+local function ShouldAutoExecute(scriptData)
+    if not AutoExecuteEnabled then
+        return false
+    end
+    
+    if not scriptData.AutoExecute then
+        return false
+    end
+    
+    if #scriptData.PlaceIds == 0 then
+        return false
+    end
+    
+    for _, placeId in ipairs(scriptData.PlaceIds) do
+        if placeId == CurrentPlaceId then
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- Fonction pour exécuter les scripts auto
+local function ExecuteAutoScripts()
+    for i, scriptData in ipairs(Scripts) do
+        if ShouldAutoExecute(scriptData) and not ExecutedScripts[i] then
+            local success = ExecuteScript(scriptData.Url, scriptData.Name)
+            if success then
+                ExecutedScripts[i] = true
+                local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
+                if item then
+                    local indicator = item:FindFirstChild("AutoIndicator")
+                    if indicator then
+                        indicator.Text = "✅ Auto Executed"
+                        indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
+                    end
+                end
+                SavePreferences() -- Sauvegarder après une exécution auto
+            end
+        end
+    end
 end
 
 -- Fonction pour créer un élément de script
 local function CreateScriptItem(scriptData, index)
     local ItemFrame = Instance.new("Frame")
     ItemFrame.Name = "ScriptItem_" .. index
-    ItemFrame.Size = UDim2.new(1, -10, 0, 55)
+    ItemFrame.Size = UDim2.new(1, -10, 0, 65)
     ItemFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     ItemFrame.BackgroundTransparency = 0.3
     ItemFrame.BorderSizePixel = 1
@@ -276,23 +479,55 @@ local function CreateScriptItem(scriptData, index)
     ItemCorner.CornerRadius = UDim.new(0, 6)
     ItemCorner.Parent = ItemFrame
 
+    -- Nom du script
     local ScriptName = Instance.new("TextLabel")
     ScriptName.Name = "ScriptName"
-    ScriptName.Size = UDim2.new(0.6, 0, 1, 0)
-    ScriptName.Position = UDim2.new(0.05, 0, 0, 0)
+    ScriptName.Size = UDim2.new(0.45, 0, 0.5, 0)
+    ScriptName.Position = UDim2.new(0.05, 0, 0.1, 0)
     ScriptName.BackgroundTransparency = 1
     ScriptName.Text = scriptData.Name
     ScriptName.TextColor3 = Color3.fromRGB(200, 200, 220)
-    ScriptName.TextSize = GetAdaptiveFontSize() - 2
+    ScriptName.TextSize = GetAdaptiveFontSize() - 1
     ScriptName.TextXAlignment = Enum.TextXAlignment.Left
-    ScriptName.Font = Enum.Font.GothamMedium
+    ScriptName.Font = Enum.Font.GothamBold
     ScriptName.Parent = ItemFrame
 
+    -- Indicateur Auto-Execute
+    local AutoIndicator = Instance.new("TextLabel")
+    AutoIndicator.Name = "AutoIndicator"
+    AutoIndicator.Size = UDim2.new(0.3, 0, 0.4, 0)
+    AutoIndicator.Position = UDim2.new(0.05, 0, 0.55, 0)
+    AutoIndicator.BackgroundTransparency = 1
+    AutoIndicator.Text = scriptData.AutoExecute and "🔄 Auto: ON" or "🔄 Auto: OFF"
+    AutoIndicator.TextColor3 = scriptData.AutoExecute and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+    AutoIndicator.TextSize = GetAdaptiveFontSize() - 5
+    AutoIndicator.TextXAlignment = Enum.TextXAlignment.Left
+    AutoIndicator.Font = Enum.Font.GothamMedium
+    AutoIndicator.Parent = ItemFrame
+
+    -- Info PlaceIds
+    local PlaceInfo = Instance.new("TextLabel")
+    PlaceInfo.Name = "PlaceInfo"
+    PlaceInfo.Size = UDim2.new(0.3, 0, 0.35, 0)
+    PlaceInfo.Position = UDim2.new(0.45, 0, 0.55, 0)
+    PlaceInfo.BackgroundTransparency = 1
+    if #scriptData.PlaceIds > 0 then
+        PlaceInfo.Text = "📌 " .. table.concat(scriptData.PlaceIds, ", ")
+    else
+        PlaceInfo.Text = "📌 Aucun"
+    end
+    PlaceInfo.TextColor3 = Color3.fromRGB(150, 150, 170)
+    PlaceInfo.TextSize = GetAdaptiveFontSize() - 6
+    PlaceInfo.TextXAlignment = Enum.TextXAlignment.Left
+    PlaceInfo.Font = Enum.Font.GothamMedium
+    PlaceInfo.Parent = ItemFrame
+
+    -- Bouton exécuter
     local ExecuteButton = Instance.new("TextButton")
     ExecuteButton.Name = "ExecuteButton"
     local btnW, btnH = GetAdaptiveButtonSize()
     ExecuteButton.Size = UDim2.new(0, btnW, 0, btnH)
-    ExecuteButton.Position = UDim2.new(0.7, 0, 0.5, -btnH/2)
+    ExecuteButton.Position = UDim2.new(0.75, 0, 0.5, -btnH/2)
     ExecuteButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
     ExecuteButton.BackgroundTransparency = 0.2
     ExecuteButton.BorderSizePixel = 0
@@ -340,12 +575,22 @@ local function CreateScriptItem(scriptData, index)
         ExecuteButton.Text = "⏳..."
         ExecuteButton.TextColor3 = Color3.fromRGB(255, 200, 100)
         
-        ExecuteScript(scriptData.Url, scriptData.Name)
+        local success = ExecuteScript(scriptData.Url, scriptData.Name)
         
         task.wait(0.3)
+        if success then
+            ExecuteButton.Text = "✅ Fait!"
+            ExecuteButton.TextColor3 = Color3.fromRGB(0, 255, 0)
+            task.wait(0.5)
+        end
         ExecuteButton.Text = oldText
         ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
     end)
+
+    if ExecutedScripts[index] then
+        AutoIndicator.Text = "✅ Auto Executed"
+        AutoIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
+    end
 
     return ItemFrame
 end
@@ -357,9 +602,32 @@ end
 
 -- Mise à jour du CanvasSize
 local function UpdateCanvasSize()
-    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 63) + 10)
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 73) + 10)
 end
 UpdateCanvasSize()
+
+-- Fonction du toggle Auto-Execute
+local function ToggleAutoExecute()
+    AutoExecuteEnabled = not AutoExecuteEnabled
+    
+    if AutoExecuteEnabled then
+        AutoToggle.Text = "✅ Auto: ON"
+        AutoToggle.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+        AutoToggle.BorderColor3 = Color3.fromRGB(40, 180, 80)
+        AutoToggle.TextColor3 = Color3.fromRGB(180, 255, 200)
+        ExecuteAutoScripts()
+    else
+        AutoToggle.Text = "❌ Auto: OFF"
+        AutoToggle.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+        AutoToggle.BorderColor3 = Color3.fromRGB(180, 40, 40)
+        AutoToggle.TextColor3 = Color3.fromRGB(255, 180, 180)
+    end
+    
+    SavePreferences()
+end
+
+-- Click du toggle
+AutoToggle.MouseButton1Click:Connect(ToggleAutoExecute)
 
 -- Fonction pour afficher la fenêtre
 local function ShowMainFrame()
@@ -378,13 +646,14 @@ local function HideMainFrame()
     MainFrame.Visible = false
     FloatButton.Visible = true
     
-    -- Animation d'apparition du bouton flottant en haut
     FloatButton.Size = UDim2.new(0, 35, 0, 35)
     FloatButton.Position = UDim2.new(0.5, -17.5, 0.02, 0)
     TweenService:Create(FloatButton, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
         Size = UDim2.new(0, 50, 0, 50),
         Position = UDim2.new(0.5, -25, 0.02, 0)
     }):Play()
+    
+    SavePreferences()
 end
 
 -- Fonction de déplacement
@@ -410,24 +679,61 @@ end
 
 local function EndDrag()
     Dragging = false
+    SavePreferences() -- Sauvegarder la position quand on arrête de déplacer
 end
 
--- Gestion des événements de déplacement
 TitleBar.InputBegan:Connect(StartDrag)
 TitleBar.InputChanged:Connect(UpdateDrag)
 TitleBar.InputEnded:Connect(EndDrag)
 
--- Bouton fermer (cache la fenêtre)
 CloseButton.MouseButton1Click:Connect(HideMainFrame)
-
--- Bouton flottant pour réouvrir
 FloatButton.MouseButton1Click:Connect(ShowMainFrame)
 
--- Rendre la fenêtre visible au démarrage
-ShowMainFrame()
+-- Charger les préférences au démarrage
+LoadPreferences()
 
--- Fonction globale pour réouvrir (si besoin)
-_G.ShowScriptExecutor = ShowMainFrame
+-- Mettre à jour l'interface selon les préférences chargées
+if AutoExecuteEnabled then
+    AutoToggle.Text = "✅ Auto: ON"
+    AutoToggle.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+    AutoToggle.BorderColor3 = Color3.fromRGB(40, 180, 80)
+    AutoToggle.TextColor3 = Color3.fromRGB(180, 255, 200)
+else
+    AutoToggle.Text = "❌ Auto: OFF"
+    AutoToggle.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    AutoToggle.BorderColor3 = Color3.fromRGB(180, 40, 40)
+    AutoToggle.TextColor3 = Color3.fromRGB(255, 180, 180)
+end
+
+-- Mettre à jour les indicateurs des scripts
+for i, scriptData in ipairs(Scripts) do
+    local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
+    if item then
+        local indicator = item:FindFirstChild("AutoIndicator")
+        if indicator then
+            indicator.Text = scriptData.AutoExecute and "🔄 Auto: ON" or "🔄 Auto: OFF"
+            indicator.TextColor3 = scriptData.AutoExecute and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+        end
+        if ExecutedScripts[i] then
+            indicator.Text = "✅ Auto Executed"
+            indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
+        end
+    end
+end
+
+-- Exécution automatique au démarrage
+task.wait(2)
+ExecuteAutoScripts()
+
+-- Surveiller les changements de place
+RunService.RenderStepped:Connect(function()
+    if game.PlaceId ~= CurrentPlaceId then
+        CurrentPlaceId = game.PlaceId
+        ExecutedScripts = {}
+        ExecuteAutoScripts()
+        SavePreferences()
+    end
+end)
 
 -- Garder la GUI en vie
 ScreenGui.AncestryChanged:Connect(function()
@@ -439,7 +745,7 @@ ScreenGui.AncestryChanged:Connect(function()
     end
 end)
 
--- Adaptation au redimensionnement de l'écran
+-- Adaptation au redimensionnement
 RunService.RenderStepped:Connect(function()
     local currentSize = workspace.CurrentCamera.ViewportSize
     local isNowSmall = currentSize.X < 600
@@ -456,6 +762,7 @@ RunService.RenderStepped:Connect(function()
         
         local newFontSize = GetAdaptiveFontSize()
         Title.TextSize = newFontSize
+        AutoToggle.TextSize = newFontSize - 4
         
         for _, item in pairs(ScrollFrame:GetChildren()) do
             if item:IsA("Frame") and item.Name:match("ScriptItem") then
@@ -463,10 +770,16 @@ RunService.RenderStepped:Connect(function()
                     if child:IsA("TextButton") and child.Name == "ExecuteButton" then
                         local btnW, btnH = GetAdaptiveButtonSize()
                         child.Size = UDim2.new(0, btnW, 0, btnH)
-                        child.Position = UDim2.new(0.7, 0, 0.5, -btnH/2)
+                        child.Position = UDim2.new(0.75, 0, 0.5, -btnH/2)
                         child.TextSize = GetAdaptiveFontSize() - 4
-                    elseif child:IsA("TextLabel") and child.Name == "ScriptName" then
-                        child.TextSize = GetAdaptiveFontSize() - 2
+                    elseif child:IsA("TextLabel") then
+                        if child.Name == "ScriptName" then
+                            child.TextSize = GetAdaptiveFontSize() - 1
+                        elseif child.Name == "AutoIndicator" then
+                            child.TextSize = GetAdaptiveFontSize() - 5
+                        elseif child.Name == "PlaceInfo" then
+                            child.TextSize = GetAdaptiveFontSize() - 6
+                        end
                     end
                 end
             end
@@ -474,4 +787,14 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("✅ Script Executor chargé!")
+-- Fonctions globales
+_G.ShowScriptExecutor = ShowMainFrame
+_G.ToggleAutoExecute = ToggleAutoExecute
+_G.ExecuteAutoScripts = ExecuteAutoScripts
+_G.SavePreferences = SavePreferences
+_G.LoadPreferences = LoadPreferences
+
+print("✅ Script Executor chargé avec Auto-Execute et Sauvegarde!")
+print("📌 Auto-Execute: " .. (AutoExecuteEnabled and "ON" or "OFF"))
+print("📌 Place ID actuel: " .. CurrentPlaceId)
+print("📌 Préférences sauvegardées dans: " .. PreferencesFile)
