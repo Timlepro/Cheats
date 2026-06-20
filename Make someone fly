@@ -1,0 +1,551 @@
+--[[
+    Script UI Mobile/PC - Popup déplaçable avec téléportation infinie
+    À mettre dans un LocalScript dans StarterPlayerScripts
+]]
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+-- Variables pour la téléportation infinie
+local InfiniteTeleport = {
+    Active = false,
+    TargetPlayer = nil,
+    Connection = nil
+}
+
+-- Création de la ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PlayerTeleportGUI"
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+
+-- Variables pour l'adaptation mobile
+local IsMobile = UserInputService.TouchEnabled
+local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
+
+-- Dimensions adaptatives
+local function GetAdaptiveSize()
+    local screenSize = workspace.CurrentCamera.ViewportSize
+    local width = math.min(400, screenSize.X * 0.9)
+    local height = math.min(500, screenSize.Y * 0.85)
+    
+    if IsMobile or IsSmallScreen then
+        width = math.min(350, screenSize.X * 0.92)
+        height = math.min(450, screenSize.Y * 0.8)
+    end
+    
+    return width, height
+end
+
+local function GetAdaptiveFontSize()
+    if IsMobile or IsSmallScreen then
+        return 14
+    end
+    return 18
+end
+
+local function GetAdaptiveButtonSize()
+    if IsMobile or IsSmallScreen then
+        return 60, 28
+    end
+    return 70, 32
+end
+
+-- Fenêtre principale
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainFrame.BackgroundTransparency = 0.95
+MainFrame.BorderSizePixel = 1
+MainFrame.BorderColor3 = Color3.fromRGB(60, 60, 70)
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+
+-- Appliquer les dimensions adaptatives
+local function UpdateMainFrameSize()
+    local width, height = GetAdaptiveSize()
+    MainFrame.Size = UDim2.new(0, width, 0, height)
+    MainFrame.Position = UDim2.new(0.5, -width/2, 0.5, -height/2)
+end
+UpdateMainFrameSize()
+
+-- Fond avec effet glass
+local GlassEffect = Instance.new("Frame")
+GlassEffect.Name = "GlassEffect"
+GlassEffect.Size = UDim2.new(1, 0, 1, 0)
+GlassEffect.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+GlassEffect.BackgroundTransparency = 0.3
+GlassEffect.BorderSizePixel = 0
+GlassEffect.Parent = MainFrame
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = MainFrame
+
+-- Barre de titre (pour déplacer)
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+TitleBar.BackgroundTransparency = 0.5
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = TitleBar
+
+-- Titre
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(0.6, 0, 1, 0)
+Title.Position = UDim2.new(0.05, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "👥 Joueurs Connectés"
+Title.TextColor3 = Color3.fromRGB(220, 220, 230)
+Title.TextSize = GetAdaptiveFontSize()
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Font = Enum.Font.GothamBold
+Title.Parent = TitleBar
+
+-- Bouton réduire/agrandir
+local ToggleButton = Instance.new("ImageButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Size = UDim2.new(0, 30, 0, 30)
+ToggleButton.Position = UDim2.new(1, -80, 0, 5)
+ToggleButton.BackgroundTransparency = 1
+ToggleButton.Image = "rbxassetid://7072718629"
+ToggleButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
+ToggleButton.Parent = TitleBar
+
+-- Bouton fermer
+local CloseButton = Instance.new("ImageButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -40, 0, 5)
+CloseButton.BackgroundTransparency = 1
+CloseButton.Image = "rbxassetid://7072718606"
+CloseButton.ImageColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.Parent = TitleBar
+
+-- Conteneur principal
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Name = "ContentContainer"
+ContentContainer.Size = UDim2.new(1, 0, 1, -40)
+ContentContainer.Position = UDim2.new(0, 0, 0, 40)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Parent = MainFrame
+
+-- ScrollView pour la liste des joueurs
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Name = "ScrollFrame"
+ScrollFrame.Size = UDim2.new(0.95, 0, 0.9, 0)
+ScrollFrame.Position = UDim2.new(0.025, 0, 0.05, 0)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.ScrollBarThickness = 6
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
+ScrollFrame.Parent = ContentContainer
+
+-- Liste des joueurs
+local PlayerList = Instance.new("UIListLayout")
+PlayerList.Padding = UDim.new(0, 8)
+PlayerList.SortOrder = Enum.SortOrder.LayoutOrder
+PlayerList.Parent = ScrollFrame
+
+-- Variables pour le déplacement
+local Dragging = false
+local DragStart = nil
+local StartPos = nil
+
+-- Variables pour le mode réduit
+local IsMinimized = false
+local MinimizedSize = 40
+local FullSize = {Width = 0, Height = 0}
+
+-- Fonction de téléportation infinie
+local function StartInfiniteTeleport(player)
+    -- Arrêter la téléportation précédente si active
+    if InfiniteTeleport.Active then
+        StopInfiniteTeleport()
+    end
+    
+    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        warn("Joueur introuvable ou sans personnage")
+        return
+    end
+    
+    InfiniteTeleport.Active = true
+    InfiniteTeleport.TargetPlayer = player
+    
+    -- Activer le noclip (désactiver les collisions avec le sol et les murs)
+    local character = player.Character
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+    
+    -- Désactiver la gravité pour le personnage
+    if character:FindFirstChild("Humanoid") then
+        character.Humanoid.PlatformStand = true
+        character.Humanoid.Sit = true
+    end
+    
+    -- Fonction de téléportation continue
+    InfiniteTeleport.Connection = RunService.Heartbeat:Connect(function()
+        if not InfiniteTeleport.Active or not InfiniteTeleport.TargetPlayer then
+            StopInfiniteTeleport()
+            return
+        end
+        
+        local target = InfiniteTeleport.TargetPlayer
+        if not target or not target.Character then
+            StopInfiniteTeleport()
+            return
+        end
+        
+        local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        local localHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        
+        if targetHRP and localHRP then
+            -- Téléporter le joueur local exactement sous les pieds du joueur cible
+            local targetPosition = targetHRP.Position
+            local rootPart = LocalPlayer.Character.HumanoidRootPart
+            
+            -- Position sous les pieds (un peu en dessous pour être sous le joueur)
+            local teleportPos = Vector3.new(targetPosition.X, targetPosition.Y - 3.5, targetPosition.Z)
+            rootPart.CFrame = CFrame.new(teleportPos)
+            
+            -- Désactiver les collisions du joueur local aussi
+            for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+            
+            -- Désactiver la gravité du joueur local
+            if LocalPlayer.Character:FindFirstChild("Humanoid") then
+                LocalPlayer.Character.Humanoid.PlatformStand = true
+                LocalPlayer.Character.Humanoid.Sit = true
+                LocalPlayer.Character.Humanoid.Jump = false
+            end
+        end
+    end)
+end
+
+local function StopInfiniteTeleport()
+    if InfiniteTeleport.Connection then
+        InfiniteTeleport.Connection:Disconnect()
+        InfiniteTeleport.Connection = nil
+    end
+    
+    -- Restaurer les paramètres normaux du joueur local
+    if LocalPlayer.Character then
+        if LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.PlatformStand = false
+            LocalPlayer.Character.Humanoid.Sit = false
+        end
+        
+        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+    
+    InfiniteTeleport.Active = false
+    InfiniteTeleport.TargetPlayer = nil
+end
+
+-- Fonction pour créer un élément de joueur
+local function CreatePlayerItem(player, index)
+    local ItemFrame = Instance.new("Frame")
+    ItemFrame.Name = "PlayerItem_" .. index
+    ItemFrame.Size = UDim2.new(1, -10, 0, 45)
+    ItemFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    ItemFrame.BackgroundTransparency = 0.3
+    ItemFrame.BorderSizePixel = 1
+    ItemFrame.BorderColor3 = Color3.fromRGB(50, 50, 65)
+    ItemFrame.Parent = ScrollFrame
+
+    local ItemCorner = Instance.new("UICorner")
+    ItemCorner.CornerRadius = UDim.new(0, 6)
+    ItemCorner.Parent = ItemFrame
+
+    -- Pseudo du joueur avec icône
+    local PlayerName = Instance.new("TextLabel")
+    PlayerName.Name = "PlayerName"
+    PlayerName.Size = UDim2.new(0.5, 0, 1, 0)
+    PlayerName.Position = UDim2.new(0.05, 0, 0, 0)
+    PlayerName.BackgroundTransparency = 1
+    PlayerName.Text = "👤 " .. player.Name
+    PlayerName.TextColor3 = Color3.fromRGB(200, 200, 220)
+    PlayerName.TextSize = GetAdaptiveFontSize() - 2
+    PlayerName.TextXAlignment = Enum.TextXAlignment.Left
+    PlayerName.Font = Enum.Font.GothamMedium
+    PlayerName.Parent = ItemFrame
+
+    -- Indicateur de statut (en ligne/hors ligne)
+    local StatusIndicator = Instance.new("Frame")
+    StatusIndicator.Name = "StatusIndicator"
+    StatusIndicator.Size = UDim2.new(0, 8, 0, 8)
+    StatusIndicator.Position = UDim2.new(0.45, 0, 0.5, -4)
+    StatusIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    StatusIndicator.BackgroundTransparency = 0.3
+    StatusIndicator.BorderSizePixel = 0
+    StatusIndicator.Parent = ItemFrame
+
+    local StatusCorner = Instance.new("UICorner")
+    StatusCorner.CornerRadius = UDim.new(1, 0)
+    StatusCorner.Parent = StatusIndicator
+
+    -- Bouton de téléportation
+    local TeleportButton = Instance.new("TextButton")
+    TeleportButton.Name = "TeleportButton"
+    local btnW, btnH = GetAdaptiveButtonSize()
+    TeleportButton.Size = UDim2.new(0, btnW, 0, btnH)
+    TeleportButton.Position = UDim2.new(0.65, 0, 0.5, -btnH/2)
+    TeleportButton.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
+    TeleportButton.BackgroundTransparency = 0.2
+    TeleportButton.BorderSizePixel = 0
+    TeleportButton.Text = "🔗 Téléporter"
+    TeleportButton.TextColor3 = Color3.fromRGB(180, 220, 255)
+    TeleportButton.TextSize = GetAdaptiveFontSize() - 5
+    TeleportButton.Font = Enum.Font.GothamBold
+    TeleportButton.Parent = ItemFrame
+
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 5)
+    ButtonCorner.Parent = TeleportButton
+
+    -- Animation au survol (seulement PC)
+    if not IsMobile then
+        TeleportButton.MouseEnter:Connect(function()
+            TweenService:Create(TeleportButton, TweenInfo.new(0.2), {
+                BackgroundTransparency = 0.1,
+                BackgroundColor3 = Color3.fromRGB(60, 160, 240)
+            }):Play()
+        end)
+
+        TeleportButton.MouseLeave:Connect(function()
+            TweenService:Create(TeleportButton, TweenInfo.new(0.2), {
+                BackgroundTransparency = 0.2,
+                BackgroundColor3 = Color3.fromRGB(40, 120, 200)
+            }):Play()
+        end)
+    end
+
+    -- Fonction du bouton de téléportation
+    TeleportButton.MouseButton1Click:Connect(function()
+        pcall(function()
+            -- Animation de clic
+            TweenService:Create(TeleportButton, TweenInfo.new(0.1), {
+                Size = UDim2.new(0, btnW-5, 0, btnH-3)
+            }):Play()
+            wait(0.1)
+            TweenService:Create(TeleportButton, TweenInfo.new(0.1), {
+                Size = UDim2.new(0, btnW, 0, btnH)
+            }):Play()
+
+            if InfiniteTeleport.Active and InfiniteTeleport.TargetPlayer == player then
+                -- Désactiver la téléportation si déjà active sur ce joueur
+                StopInfiniteTeleport()
+                TeleportButton.Text = "🔗 Téléporter"
+                TeleportButton.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
+                TeleportButton.TextColor3 = Color3.fromRGB(180, 220, 255)
+            else
+                -- Activer la téléportation
+                StartInfiniteTeleport(player)
+                TeleportButton.Text = "⏹ Arrêter"
+                TeleportButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+                TeleportButton.TextColor3 = Color3.fromRGB(255, 200, 200)
+            end
+        end)
+    end)
+
+    return ItemFrame
+end
+
+-- Fonction pour mettre à jour la liste des joueurs
+local function UpdatePlayerList()
+    -- Supprimer les anciens éléments (sauf le UIListLayout)
+    for _, child in ipairs(ScrollFrame:GetChildren()) do
+        if child:IsA("Frame") and child.Name:match("PlayerItem_") then
+            child:Destroy()
+        end
+    end
+    
+    -- Récupérer tous les joueurs sauf le joueur local
+    local playerList = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(playerList, player)
+        end
+    end
+    
+    -- Trier par nom
+    table.sort(playerList, function(a, b)
+        return a.Name < b.Name
+    end)
+    
+    -- Créer les éléments
+    for i, player in ipairs(playerList) do
+        CreatePlayerItem(player, i)
+    end
+    
+    -- Mettre à jour le CanvasSize
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#playerList * 53) + 10)
+end
+
+-- Appel initial
+UpdatePlayerList()
+
+-- Mettre à jour la liste quand des joueurs rejoignent/quittent
+Players.PlayerAdded:Connect(function()
+    UpdatePlayerList()
+end)
+
+Players.PlayerRemoving:Connect(function()
+    -- Si le joueur cible quitte, arrêter la téléportation
+    if InfiniteTeleport.Active and InfiniteTeleport.TargetPlayer then
+        StopInfiniteTeleport()
+    end
+    UpdatePlayerList()
+end)
+
+-- Fonction pour basculer le mode réduit
+local function ToggleMinimize()
+    IsMinimized = not IsMinimized
+    
+    if IsMinimized then
+        FullSize.Width = MainFrame.Size.X.Offset
+        FullSize.Height = MainFrame.Size.Y.Offset
+        
+        local targetWidth = math.min(200, MainFrame.Size.X.Offset)
+        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Size = UDim2.new(0, targetWidth, 0, MinimizedSize)
+        }):Play()
+        
+        ContentContainer.Visible = false
+        ToggleButton.ImageColor3 = Color3.fromRGB(50, 200, 50)
+        Title.Text = "👥 Joueurs ▼"
+    else
+        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
+            Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
+        }):Play()
+        
+        wait(0.3)
+        ContentContainer.Visible = true
+        ToggleButton.ImageColor3 = Color3.fromRGB(200, 200, 50)
+        Title.Text = "👥 Joueurs Connectés"
+    end
+end
+
+-- Fonction de déplacement
+local function StartDrag(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        Dragging = true
+        DragStart = input.Position
+        StartPos = MainFrame.Position
+    end
+end
+
+local function UpdateDrag(input)
+    if Dragging then
+        local delta = input.Position - DragStart
+        MainFrame.Position = UDim2.new(
+            StartPos.X.Scale,
+            StartPos.X.Offset + delta.X,
+            StartPos.Y.Scale,
+            StartPos.Y.Offset + delta.Y
+        )
+    end
+end
+
+local function EndDrag()
+    Dragging = false
+end
+
+-- Gestion des événements de déplacement
+TitleBar.InputBegan:Connect(StartDrag)
+TitleBar.InputChanged:Connect(UpdateDrag)
+TitleBar.InputEnded:Connect(EndDrag)
+
+-- Boutons
+ToggleButton.MouseButton1Click:Connect(ToggleMinimize)
+
+CloseButton.MouseButton1Click:Connect(function()
+    -- Arrêter la téléportation si active
+    if InfiniteTeleport.Active then
+        StopInfiniteTeleport()
+    end
+    MainFrame.Visible = false
+    ScreenGui:Destroy()
+end)
+
+-- Rendre la GUI visible au démarrage
+MainFrame.Visible = true
+
+-- Raccourcis clavier
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.H and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+    
+    if input.KeyCode == Enum.KeyCode.M and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        ToggleMinimize()
+    end
+    
+    if input.KeyCode == Enum.KeyCode.Escape and MainFrame.Visible then
+        if InfiniteTeleport.Active then
+            StopInfiniteTeleport()
+        end
+        MainFrame.Visible = false
+        ScreenGui:Destroy()
+    end
+end)
+
+-- Adaptation au redimensionnement de l'écran
+RunService.RenderStepped:Connect(function()
+    local currentSize = workspace.CurrentCamera.ViewportSize
+    local isNowSmall = currentSize.X < 600
+    
+    if isNowSmall ~= IsSmallScreen then
+        IsSmallScreen = isNowSmall
+        IsMobile = UserInputService.TouchEnabled
+        
+        UpdateMainFrameSize()
+        
+        local newFontSize = GetAdaptiveFontSize()
+        Title.TextSize = newFontSize
+        
+        for _, item in pairs(ScrollFrame:GetChildren()) do
+            if item:IsA("Frame") and item.Name:match("PlayerItem_") then
+                for _, child in pairs(item:GetChildren()) do
+                    if child:IsA("TextButton") and child.Name == "TeleportButton" then
+                        local btnW, btnH = GetAdaptiveButtonSize()
+                        child.Size = UDim2.new(0, btnW, 0, btnH)
+                        child.Position = UDim2.new(0.65, 0, 0.5, -btnH/2)
+                        child.TextSize = GetAdaptiveFontSize() - 5
+                    elseif child:IsA("TextLabel") and child.Name == "PlayerName" then
+                        child.TextSize = GetAdaptiveFontSize() - 2
+                    end
+                end
+            end
+        end
+    end
+end)
+
+print("Player Teleport GUI chargé avec succès!")
+print("Ctrl + H : Afficher/Masquer")
+print("Ctrl + M : Réduire/Agrandir")
+print("Échap : Fermer et arrêter la téléportation")
