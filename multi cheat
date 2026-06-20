@@ -22,8 +22,8 @@ local Scripts = {
         PlaceIds = {}
     },
     {
-        Name = "None",
-        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/ESP",
+        Name = "Place ID Finder",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Place%20ID%20Finder",
         requirePlaceId = false,
         PlaceIds = {}
     },
