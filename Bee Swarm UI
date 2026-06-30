@@ -1,8 +1,5 @@
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-lacal ScreenGui = playerGui:WaitForChild("ScreenGui")
-local meterHUI = ScreenGui:WaitForChild("MeterHUI")
-
-if frame then
-	meterHUI.Position = UDim2.new(0.5, 0, 0.6, 0)
-end
+local screenGui = playerGui:WaitForChild("ScreenGui")
+local meterHUD = screenGui:WaitForChild("MeterHUD")
+meterHUD.Position = UDim2.new(0.5, 0, 0.6, 0)
