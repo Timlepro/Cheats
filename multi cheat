@@ -28,6 +28,12 @@ local Scripts = {
         PlaceIds = {}
     },
     {
+        Name = "Bee Swarm UI",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Bee%20Swarm%20UI",
+        requirePlaceId = false,
+        PlaceIds = {}
+    },
+    {
         Name = "None",
         Url = "https://raw.githubusercontent.com/votre-repo/script3.lua",
         requirePlaceId = false,
