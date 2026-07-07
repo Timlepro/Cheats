@@ -21,8 +21,8 @@ local Scripts = {
     {
         Name = "Bee Swarm UI",
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Bee%20Swarm%20UI",
-        requirePlaceId = false,
-        PlaceIds = {}
+        requirePlaceId = True,
+        PlaceIds = {1537690962}
     },
     {
         Name = "Gag 2 roll back",
