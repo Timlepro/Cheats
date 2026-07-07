@@ -25,8 +25,14 @@ local Scripts = {
         PlaceIds = {1537690962}
     },
     {
-        Name = "Gag 2 roll back",
+        Name = "GAG 2 Roll Back",
         Url = "https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua",
+        requirePlaceId = true,
+        PlaceIds = {97598239454123}
+    },
+    {
+        Name = "GAG 2",
+        Url = "http://luminon.top/loader.lua",
         requirePlaceId = true,
         PlaceIds = {97598239454123}
     },
