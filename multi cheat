@@ -32,10 +32,10 @@ local Scripts = {
     },
 }
 
--- ===== GESTION DES PRÉFÉRENCES (LOCAL = DELTA EXECUTOR) =====
+-- ===== GESTION DES PRÉFÉRENCES (LOCAL) =====
 local PreferencesFile = "ScriptExecutor_Toggles.txt"
 
--- Fonction pour sauvegarder les toggles (local)
+-- Fonction pour sauvegarder les toggles
 local function SaveToggles()
     local data = {
         Toggles = {},
@@ -49,7 +49,7 @@ local function SaveToggles()
     end
     
     for i, executed in pairs(ExecutedScripts) do
-        data.ExecutedScripts[i] = executed
+        data.ExecutedScripts[i] executed
     end
     
     data.FloatPosition = {
@@ -61,7 +61,6 @@ local function SaveToggles()
     
     local jsonData = HttpService:JSONEncode(data)
     
-    -- Sauvegarde locale (Delta Executor)
     local success, err = pcall(function()
         writefile(PreferencesFile, jsonData)
     end)
@@ -69,49 +68,45 @@ local function SaveToggles()
     if success then
         print("✅ Toggles sauvegardés localement!")
     else
-        warn("❌ Erreur de sauvegarde locale: " .. err)
+        warn("❌ Erreur de sauvegarde: " .. err)
     end
 end
 
--- Fonction pour charger les toggles (local)
+-- Fonction pour charger les toggles
 local function LoadToggles()
-    -- Vérifier si le fichier existe localement
     local fileExists, _ = pcall(function()
         return isfile(PreferencesFile)
     end)
     
     if not fileExists then
-        print("📝 Fichier local inexistant, création avec valeurs par défaut...")
+        print("📝 Fichier local inexistant, création...")
         SaveToggles()
         return
     end
     
-    -- Lire le fichier local
     local success, jsonData = pcall(function()
         return readfile(PreferencesFile)
     end)
     
     if not success then
-        print("❌ Erreur de lecture du fichier local, création d'un nouveau...")
+        print("❌ Erreur de lecture, création d'un nouveau...")
         SaveToggles()
         return
     end
     
-    -- Décoder le JSON
     local data = nil
     local decodeSuccess, decodedData = pcall(function()
         return HttpService:JSONDecode(jsonData)
     end)
     
     if not decodeSuccess then
-        print("❌ Erreur de décodage JSON, création d'un nouveau fichier...")
+        print("❌ Erreur de décodage, création d'un nouveau...")
         SaveToggles()
         return
     end
     
     data = decodedData
     
-    -- Appliquer les toggles
     if data.Toggles then
         for i, toggleState in pairs(data.Toggles) do
             if ScriptToggles[i] ~= nil then
@@ -120,14 +115,12 @@ local function LoadToggles()
         end
     end
     
-    -- Appliquer les scripts exécutés
     if data.ExecutedScripts then
         for i, executed in pairs(data.ExecutedScripts) do
             ExecutedScripts[i] = executed
         end
     end
     
-    -- Appliquer la position du bouton flottant
     if data.FloatPosition then
         FloatButton.Position = UDim2.new(
             data.FloatPosition.X or 0.5,
@@ -137,7 +130,6 @@ local function LoadToggles()
         )
     end
     
-    -- Appliquer l'état du drag
     if data.DragEnabled ~= nil then
         DragEnabled = data.DragEnabled
         if DragEnabled then
@@ -147,7 +139,6 @@ local function LoadToggles()
             DragToggleButton.TextColor3 = Color3.fromRGB(180, 255, 200)
             DragToggleLabel.Text = "🚀 Drag: ON"
             DragToggleLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-            TitleBar.BackgroundTransparency = 0.5
         else
             DragToggleButton.Text = "❌ OFF"
             DragToggleButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
@@ -155,7 +146,6 @@ local function LoadToggles()
             DragToggleButton.TextColor3 = Color3.fromRGB(255, 180, 180)
             DragToggleLabel.Text = "🔒 Drag: OFF"
             DragToggleLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            TitleBar.BackgroundTransparency = 0.8
         end
     end
     
@@ -260,7 +250,7 @@ TitleCorner.Parent = TitleBar
 -- Titre
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.Size = UDim2.new(0.4, 0, 1, 0)
+Title.Size = UDim2.new(0.35, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "📁 Script Executor"
@@ -459,6 +449,10 @@ DragToggleButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
+-- ===== BOUTON POUR RANGER L'UI (bouton flottant) =====
+-- C'est le même bouton flottant qui sert à ranger l'UI
+-- Il apparaît quand on minimise avec le bouton −
+
 -- Variables pour le déplacement de la fenêtre principale
 local Dragging = false
 local DragStart = nil
@@ -495,7 +489,7 @@ TitleBar.InputBegan:Connect(StartDrag)
 TitleBar.InputChanged:Connect(UpdateDrag)
 TitleBar.InputEnded:Connect(EndDrag)
 
--- Bouton flottant pour réouvrir (après minimisation)
+-- Bouton flottant pour réouvrir (après minimisation) - C'EST LE BOUTON POUR RANGER L'UI
 local FloatButton = Instance.new("ImageButton")
 FloatButton.Name = "FloatButton"
 FloatButton.Size = UDim2.new(0, 50, 0, 50)
@@ -532,7 +526,7 @@ local FloatStartPos = nil
 local FloatIsClick = false
 local FloatClickTime = 0
 
--- Gestion du déplacement du bouton flottant
+-- Gestion du déplacement du bouton flottant (avec priorité au drag)
 FloatButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         FloatIsClick = true
@@ -917,7 +911,7 @@ local function ShowWindow()
     FloatButton.Visible = false
 end
 
--- FERMER LA FENÊTRE (pas détruire)
+-- FERMER LA FENÊTRE
 local function CloseWindow()
     MainFrame.Visible = false
     print("👻 Fenêtre fermée - Utilisez _G.ShowScriptExecutor() pour réouvrir")
@@ -925,9 +919,10 @@ end
 
 -- Boutons
 MinimizeButton.MouseButton1Click:Connect(MinimizeWindow)
+FloatButton.MouseButton1Click:Connect(ShowWindow)
 CloseButton.MouseButton1Click:Connect(CloseWindow)
 
--- Charger les toggles au démarrage (local)
+-- Charger les toggles au démarrage
 LoadToggles()
 
 -- Mettre à jour l'interface avec les toggles chargés
@@ -1036,7 +1031,7 @@ _G.LoadToggles = LoadToggles
 print("✅ Script Executor chargé!")
 print("📌 Toggle ON/OFF par script avec sauvegarde LOCALE")
 print("📌 Fichier: " .. PreferencesFile)
-print("📌 Bouton − pour réduire")
+print("📌 Bouton − pour ranger l'UI (bouton flottant)")
 print("📌 Bouton X pour fermer la fenêtre")
 print("📌 Bouton flottant déplaçable (position sauvegardée)")
 print("📌 Drag toggle en bas de la fenêtre")
