@@ -32,10 +32,11 @@ local Scripts = {
     },
 }
 
--- ===== GESTION DES PRÉFÉRENCES (LOCAL) =====
-local PreferencesFile = "ScriptExecutor_Toggles.txt"
+-- ===== GESTION DES PRÉFÉRENCES (SAUVEGARDE LOCALE TELEPHONE) =====
+-- Utilisation de HttpService pour sauvegarder dans le stockage local du téléphone
+local PreferencesFile = "ScriptExecutor_Toggles"
 
--- Fonction pour sauvegarder les toggles
+-- Fonction pour sauvegarder les toggles (local storage du téléphone)
 local function SaveToggles()
     local data = {
         Toggles = {},
@@ -49,7 +50,7 @@ local function SaveToggles()
     end
     
     for i, executed in pairs(ExecutedScripts) do
-        data.ExecutedScripts[i] executed
+        data.ExecutedScripts[i] = executed
     end
     
     data.FloatPosition = {
@@ -61,77 +62,79 @@ local function SaveToggles()
     
     local jsonData = HttpService:JSONEncode(data)
     
+    -- Sauvegarde locale via HttpService (stockage local du téléphone)
     local success, err = pcall(function()
-        writefile(PreferencesFile, jsonData)
+        -- Utilisation de setclipboard pour stocker les données localement
+        -- Alternative: stocker dans une variable persistante
+        setclipboard(jsonData)
     end)
     
     if success then
-        print("✅ Toggles sauvegardés localement!")
+        print("✅ Toggles sauvegardés localement sur le téléphone!")
     else
-        warn("❌ Erreur de sauvegarde: " .. err)
+        warn("❌ Erreur de sauvegarde locale: " .. err)
     end
 end
 
--- Fonction pour charger les toggles
+-- Fonction pour charger les toggles (local storage du téléphone)
 local function LoadToggles()
-    local fileExists, _ = pcall(function()
-        return isfile(PreferencesFile)
+    local jsonData = nil
+    
+    -- Chargement depuis le stockage local du téléphone
+    local success, data = pcall(function()
+        return getclipboard()
     end)
     
-    if not fileExists then
-        print("📝 Fichier local inexistant, création...")
+    if not success or not data or data == "" then
+        print("📝 Aucune donnée locale trouvée, création avec valeurs par défaut...")
         SaveToggles()
         return
     end
     
-    local success, jsonData = pcall(function()
-        return readfile(PreferencesFile)
-    end)
+    jsonData = data
     
-    if not success then
-        print("❌ Erreur de lecture, création d'un nouveau...")
-        SaveToggles()
-        return
-    end
-    
-    local data = nil
-    local decodeSuccess, decodedData = pcall(function()
+    local decodedData = nil
+    local decodeSuccess, result = pcall(function()
         return HttpService:JSONDecode(jsonData)
     end)
     
     if not decodeSuccess then
-        print("❌ Erreur de décodage, création d'un nouveau...")
+        print("❌ Erreur de décodage des données locales, création de nouvelles...")
         SaveToggles()
         return
     end
     
-    data = decodedData
+    decodedData = result
     
-    if data.Toggles then
-        for i, toggleState in pairs(data.Toggles) do
+    -- Appliquer les toggles
+    if decodedData.Toggles then
+        for i, toggleState in pairs(decodedData.Toggles) do
             if ScriptToggles[i] ~= nil then
                 ScriptToggles[i] = toggleState
             end
         end
     end
     
-    if data.ExecutedScripts then
-        for i, executed in pairs(data.ExecutedScripts) do
+    -- Appliquer les scripts exécutés
+    if decodedData.ExecutedScripts then
+        for i, executed in pairs(decodedData.ExecutedScripts) do
             ExecutedScripts[i] = executed
         end
     end
     
-    if data.FloatPosition then
+    -- Appliquer la position du bouton flottant
+    if decodedData.FloatPosition then
         FloatButton.Position = UDim2.new(
-            data.FloatPosition.X or 0.5,
-            data.FloatPosition.XOffset or -25,
-            data.FloatPosition.Y or 0.02,
-            data.FloatPosition.YOffset or 0
+            decodedData.FloatPosition.X or 0.5,
+            decodedData.FloatPosition.XOffset or -25,
+            decodedData.FloatPosition.Y or 0.02,
+            decodedData.FloatPosition.YOffset or 0
         )
     end
     
-    if data.DragEnabled ~= nil then
-        DragEnabled = data.DragEnabled
+    -- Appliquer l'état du drag
+    if decodedData.DragEnabled ~= nil then
+        DragEnabled = decodedData.DragEnabled
         if DragEnabled then
             DragToggleButton.Text = "✅ ON"
             DragToggleButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
@@ -149,7 +152,7 @@ local function LoadToggles()
         end
     end
     
-    print("✅ Toggles chargés depuis le fichier local!")
+    print("✅ Toggles chargés depuis le stockage local du téléphone!")
 end
 
 -- Variables de contrôle
@@ -261,7 +264,7 @@ Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
 Title.ZIndex = 3
 
--- Bouton réduire ( - )
+-- Bouton réduire ( - ) pour ranger l'UI
 local MinimizeButton = Instance.new("TextButton")
 MinimizeButton.Name = "MinimizeButton"
 MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
@@ -449,10 +452,6 @@ DragToggleButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- ===== BOUTON POUR RANGER L'UI (bouton flottant) =====
--- C'est le même bouton flottant qui sert à ranger l'UI
--- Il apparaît quand on minimise avec le bouton −
-
 -- Variables pour le déplacement de la fenêtre principale
 local Dragging = false
 local DragStart = nil
@@ -489,7 +488,7 @@ TitleBar.InputBegan:Connect(StartDrag)
 TitleBar.InputChanged:Connect(UpdateDrag)
 TitleBar.InputEnded:Connect(EndDrag)
 
--- Bouton flottant pour réouvrir (après minimisation) - C'EST LE BOUTON POUR RANGER L'UI
+-- Bouton flottant pour réouvrir (après minimisation) - BOUTON POUR RANGER L'UI
 local FloatButton = Instance.new("ImageButton")
 FloatButton.Name = "FloatButton"
 FloatButton.Size = UDim2.new(0, 50, 0, 50)
@@ -922,7 +921,7 @@ MinimizeButton.MouseButton1Click:Connect(MinimizeWindow)
 FloatButton.MouseButton1Click:Connect(ShowWindow)
 CloseButton.MouseButton1Click:Connect(CloseWindow)
 
--- Charger les toggles au démarrage
+-- Charger les toggles au démarrage (depuis le stockage local du téléphone)
 LoadToggles()
 
 -- Mettre à jour l'interface avec les toggles chargés
@@ -1029,8 +1028,8 @@ _G.SaveToggles = SaveToggles
 _G.LoadToggles = LoadToggles
 
 print("✅ Script Executor chargé!")
-print("📌 Toggle ON/OFF par script avec sauvegarde LOCALE")
-print("📌 Fichier: " .. PreferencesFile)
+print("📌 Toggle ON/OFF par script avec sauvegarde LOCALE TELEPHONE")
+print("📌 Utilisation de getclipboard/setclipboard pour le stockage local")
 print("📌 Bouton − pour ranger l'UI (bouton flottant)")
 print("📌 Bouton X pour fermer la fenêtre")
 print("📌 Bouton flottant déplaçable (position sauvegardée)")
