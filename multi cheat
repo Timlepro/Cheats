@@ -35,18 +35,15 @@ local Scripts = {
 -- ===== GESTION DES PRÉFÉRENCES =====
 local configFile = "ScriptExecutor_Config.json"
 
--- Variables de contrôle (déclarées AVANT les fonctions de sauvegarde)
 local CurrentPlaceId = game.PlaceId
 local ExecutedScripts = {}
 local ScriptToggles = {}
 local DragEnabled = true
 
--- Initialiser les toggles
 for i = 1, #Scripts do
     ScriptToggles[i] = false
 end
 
--- Déclarer FloatButton avant de l'utiliser dans SaveToggles
 local FloatButton = nil
 local DragToggleButton = nil
 local DragToggleLabel = nil
@@ -55,7 +52,6 @@ local MainFrame = nil
 local ScrollFrame = nil
 local ScreenGui = nil
 
--- Fonction pour sauvegarder la config
 local function SaveToggles()
     local data = {
         Toggles = {},
@@ -64,12 +60,10 @@ local function SaveToggles()
         DragEnabled = DragEnabled
     }
     
-    -- Sauvegarde des toggles
     for i = 1, #Scripts do
         data.Toggles[i] = ScriptToggles[i] or false
     end
     
-    -- Sauvegarde des scripts exécutés
     for i = 1, #Scripts do
         data.ExecutedScripts[i] = ExecutedScripts[i] or false
     end
@@ -92,21 +86,13 @@ local function SaveToggles()
     
     local jsonData = HttpService:JSONEncode(data)
     
-    local success, err = pcall(function()
+    pcall(function()
         writefile(configFile, jsonData)
     end)
-    
-    if success then
-        print("✅ Config sauvegardée !")
-    else
-        warn("❌ Erreur de sauvegarde: " .. err)
-    end
 end
 
--- Fonction pour charger la config
 local function LoadToggles()
     if not isfile(configFile) then
-        print("📝 Aucune config trouvée, création par défaut...")
         SaveToggles()
         return
     end
@@ -117,7 +103,6 @@ local function LoadToggles()
     end)
     
     if not success then
-        print("❌ Erreur de lecture, création d'une nouvelle config...")
         SaveToggles()
         return
     end
@@ -130,13 +115,11 @@ local function LoadToggles()
     end)
     
     if not decodeSuccess then
-        print("❌ Erreur de décodage, création d'une nouvelle config...")
         SaveToggles()
         return
     end
     
     decodedData = result
-    print("✅ Config chargée !")
     
     if decodedData.Toggles then
         for i = 1, #Scripts do
@@ -183,18 +166,15 @@ local function LoadToggles()
     end
 end
 
--- Création de la ScreenGui
 ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ScriptExecutorGUI"
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Variables pour l'adaptation mobile
 local IsMobile = UserInputService.TouchEnabled
 local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
 
--- Dimensions adaptatives
 local function GetAdaptiveSize()
     local screenSize = workspace.CurrentCamera.ViewportSize
     local width = math.min(420, screenSize.X * 0.9)
@@ -222,7 +202,6 @@ local function GetAdaptiveButtonSize()
     return 70, 30
 end
 
--- Fenêtre principale
 MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
@@ -241,7 +220,6 @@ local function UpdateMainFrameSize()
 end
 UpdateMainFrameSize()
 
--- Fond avec effet glass
 local GlassEffect = Instance.new("Frame")
 GlassEffect.Name = "GlassEffect"
 GlassEffect.Size = UDim2.new(1, 0, 1, 0)
@@ -255,7 +233,6 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, 10)
 Corner.Parent = MainFrame
 
--- Barre de titre
 TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
 TitleBar.Size = UDim2.new(1, 0, 0, 45)
@@ -269,7 +246,6 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 10)
 TitleCorner.Parent = TitleBar
 
--- Titre
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
 Title.Size = UDim2.new(0.35, 0, 1, 0)
@@ -283,7 +259,6 @@ Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
 Title.ZIndex = 3
 
--- Bouton réduire ( - ) pour ranger l'UI
 local MinimizeButton = Instance.new("TextButton")
 MinimizeButton.Name = "MinimizeButton"
 MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
@@ -316,7 +291,6 @@ MinimizeButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- Bouton X (fermer la fenêtre)
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
@@ -349,7 +323,6 @@ CloseButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- Conteneur principal
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Name = "ContentContainer"
 ContentContainer.Size = UDim2.new(1, 0, 1, -45)
@@ -358,7 +331,6 @@ ContentContainer.BackgroundTransparency = 1
 ContentContainer.Parent = MainFrame
 ContentContainer.ZIndex = 2
 
--- ScrollView
 ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "ScrollFrame"
 ScrollFrame.Size = UDim2.new(0.95, 0, 0.85, 0)
@@ -371,13 +343,11 @@ ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
 ScrollFrame.Parent = ContentContainer
 ScrollFrame.ZIndex = 2
 
--- Liste des scripts
 local ScriptList = Instance.new("UIListLayout")
 ScriptList.Padding = UDim.new(0, 8)
 ScriptList.SortOrder = Enum.SortOrder.LayoutOrder
 ScriptList.Parent = ScrollFrame
 
--- ===== BOUTON TOGGLE DRAG (en bas de la fenêtre) =====
 local DragToggleFrame = Instance.new("Frame")
 DragToggleFrame.Name = "DragToggleFrame"
 DragToggleFrame.Size = UDim2.new(0.95, 0, 0.08, 0)
@@ -393,7 +363,6 @@ local DragToggleCorner = Instance.new("UICorner")
 DragToggleCorner.CornerRadius = UDim.new(0, 6)
 DragToggleCorner.Parent = DragToggleFrame
 
--- Texte "Drag: ON/OFF"
 DragToggleLabel = Instance.new("TextLabel")
 DragToggleLabel.Name = "DragToggleLabel"
 DragToggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
@@ -407,7 +376,6 @@ DragToggleLabel.Font = Enum.Font.GothamBold
 DragToggleLabel.Parent = DragToggleFrame
 DragToggleLabel.ZIndex = 4
 
--- Bouton toggle drag
 DragToggleButton = Instance.new("TextButton")
 DragToggleButton.Name = "DragToggleButton"
 DragToggleButton.Size = UDim2.new(0, 80, 0, 30)
@@ -428,7 +396,6 @@ local DragToggleCorner2 = Instance.new("UICorner")
 DragToggleCorner2.CornerRadius = UDim.new(0, 5)
 DragToggleCorner2.Parent = DragToggleButton
 
--- Fonction du toggle drag
 local function ToggleDrag()
     DragEnabled = not DragEnabled
     
@@ -459,7 +426,6 @@ end
 
 DragToggleButton.MouseButton1Click:Connect(ToggleDrag)
 
--- Animation au survol
 DragToggleButton.MouseEnter:Connect(function()
     TweenService:Create(DragToggleButton, TweenInfo.new(0.2), {
         BackgroundTransparency = 0.1
@@ -472,12 +438,10 @@ DragToggleButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- Variables pour le déplacement de la fenêtre principale
 local Dragging = false
 local DragStart = nil
 local StartPos = nil
 
--- Fonction de déplacement de la fenêtre principale (avec toggle drag)
 local function StartDrag(input)
     if not DragEnabled then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -508,7 +472,6 @@ TitleBar.InputBegan:Connect(StartDrag)
 TitleBar.InputChanged:Connect(UpdateDrag)
 TitleBar.InputEnded:Connect(EndDrag)
 
--- Bouton flottant pour réouvrir (après minimisation)
 FloatButton = Instance.new("ImageButton")
 FloatButton.Name = "FloatButton"
 FloatButton.Size = UDim2.new(0, 50, 0, 50)
@@ -538,14 +501,12 @@ FloatLabel.Font = Enum.Font.GothamBold
 FloatLabel.Parent = FloatButton
 FloatLabel.ZIndex = 11
 
--- Variables pour le déplacement du bouton flottant
 local FloatDragging = false
 local FloatDragStart = nil
 local FloatStartPos = nil
 local FloatIsClick = false
 local FloatClickTime = 0
 
--- Gestion du déplacement du bouton flottant
 FloatButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         FloatIsClick = true
@@ -591,7 +552,6 @@ FloatButton.InputEnded:Connect(function()
     FloatDragging = false
 end)
 
--- Animation du bouton flottant au survol
 FloatButton.MouseEnter:Connect(function()
     TweenService:Create(FloatButton, TweenInfo.new(0.2), {
         Size = UDim2.new(0, 55, 0, 55),
@@ -606,7 +566,6 @@ FloatButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- Fonction pour exécuter un script
 local function ExecuteScript(url, scriptName)
     if not url or url == "" then
         return false
@@ -641,7 +600,6 @@ local function ExecuteScript(url, scriptName)
     return success
 end
 
--- Fonction pour vérifier si un script doit s'exécuter automatiquement
 local function ShouldAutoExecute(scriptData, index)
     if not ScriptToggles[index] then
         return false
@@ -666,7 +624,6 @@ local function ShouldAutoExecute(scriptData, index)
     return true
 end
 
--- Fonction pour exécuter les scripts auto
 local function ExecuteAutoScripts()
     local executed = false
     for i = 1, #Scripts do
@@ -691,7 +648,6 @@ local function ExecuteAutoScripts()
     end
 end
 
--- Fonction pour créer un élément de script
 local function CreateScriptItem(scriptData, index)
     local ItemFrame = Instance.new("Frame")
     ItemFrame.Name = "ScriptItem_" .. index
@@ -707,7 +663,6 @@ local function CreateScriptItem(scriptData, index)
     ItemCorner.CornerRadius = UDim.new(0, 6)
     ItemCorner.Parent = ItemFrame
 
-    -- Nom du script
     local ScriptName = Instance.new("TextLabel")
     ScriptName.Name = "ScriptName"
     ScriptName.Size = UDim2.new(0.4, 0, 0.4, 0)
@@ -721,7 +676,6 @@ local function CreateScriptItem(scriptData, index)
     ScriptName.Parent = ItemFrame
     ScriptName.ZIndex = 3
 
-    -- Info PlaceIds
     local PlaceInfo = Instance.new("TextLabel")
     PlaceInfo.Name = "PlaceInfo"
     PlaceInfo.Size = UDim2.new(0.4, 0, 0.35, 0)
@@ -743,7 +697,6 @@ local function CreateScriptItem(scriptData, index)
     PlaceInfo.Parent = ItemFrame
     PlaceInfo.ZIndex = 3
 
-    -- Toggle Button (ON/OFF par script)
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Name = "ToggleButton"
     ToggleButton.Size = UDim2.new(0, 55, 0, 26)
@@ -764,7 +717,6 @@ local function CreateScriptItem(scriptData, index)
     ToggleCorner.CornerRadius = UDim.new(0, 5)
     ToggleCorner.Parent = ToggleButton
 
-    -- Indicateur Auto-Execute
     local AutoIndicator = Instance.new("TextLabel")
     AutoIndicator.Name = "AutoIndicator"
     AutoIndicator.Size = UDim2.new(0.2, 0, 0.3, 0)
@@ -778,7 +730,6 @@ local function CreateScriptItem(scriptData, index)
     AutoIndicator.Parent = ItemFrame
     AutoIndicator.ZIndex = 3
 
-    -- Bouton exécuter manuel
     local ExecuteButton = Instance.new("TextButton")
     ExecuteButton.Name = "ExecuteButton"
     local btnW, btnH = GetAdaptiveButtonSize()
@@ -799,7 +750,6 @@ local function CreateScriptItem(scriptData, index)
     ButtonCorner.CornerRadius = UDim.new(0, 5)
     ButtonCorner.Parent = ExecuteButton
 
-    -- Fonction du toggle
     local function ToggleScript()
         ScriptToggles[index] = not ScriptToggles[index]
         
@@ -832,7 +782,6 @@ local function CreateScriptItem(scriptData, index)
 
     ToggleButton.MouseButton1Click:Connect(ToggleScript)
 
-    -- Animation au survol
     if not IsMobile then
         ToggleButton.MouseEnter:Connect(function()
             TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
@@ -861,7 +810,6 @@ local function CreateScriptItem(scriptData, index)
         end)
     end
 
-    -- Exécution manuelle
     ExecuteButton.MouseButton1Click:Connect(function()
         if ExecuteButton.Text == "⏳..." then
             return
@@ -901,18 +849,15 @@ local function CreateScriptItem(scriptData, index)
     return ItemFrame
 end
 
--- Création des éléments de script
 for i = 1, #Scripts do
     CreateScriptItem(Scripts[i], i)
 end
 
--- Mise à jour du CanvasSize
 local function UpdateCanvasSize()
     ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 83) + 10)
 end
 UpdateCanvasSize()
 
--- Fonctions de la fenêtre
 local function MinimizeWindow()
     SaveToggles()
     MainFrame.Visible = false
@@ -933,18 +878,14 @@ local function CloseWindow()
     SaveToggles()
     MainFrame.Visible = false
     FloatButton.Visible = false
-    print("👻 Fenêtre fermée - Utilisez _G.ShowScriptExecutor() pour réouvrir")
 end
 
--- Boutons
 MinimizeButton.MouseButton1Click:Connect(MinimizeWindow)
 FloatButton.MouseButton1Click:Connect(ShowWindow)
 CloseButton.MouseButton1Click:Connect(CloseWindow)
 
--- Charger la config au démarrage
 LoadToggles()
 
--- Mettre à jour l'interface avec les toggles chargés
 for i = 1, #Scripts do
     local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
     if item then
@@ -970,11 +911,10 @@ for i = 1, #Scripts do
     end
 end
 
--- Exécution automatique au démarrage
-task.wait(2)
+-- Attendre que le jeu soit complètement chargé puis exécuter les scripts auto
+task.wait(3)
 ExecuteAutoScripts()
 
--- Surveiller les changements de place
 RunService.RenderStepped:Connect(function()
     if game.PlaceId ~= CurrentPlaceId then
         CurrentPlaceId = game.PlaceId
@@ -993,7 +933,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Adaptation au redimensionnement
 RunService.RenderStepped:Connect(function()
     local currentSize = workspace.CurrentCamera.ViewportSize
     local isNowSmall = currentSize.X < 600
@@ -1040,16 +979,8 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Fonctions globales
 _G.ShowScriptExecutor = ShowWindow
 _G.CloseScriptExecutor = CloseWindow
 _G.ExecuteAutoScripts = ExecuteAutoScripts
 _G.SaveToggles = SaveToggles
 _G.LoadToggles = LoadToggles
-
-print("✅ Script Executor chargé!")
-print("📌 Fichier de config: " .. configFile)
-print("📌 Bouton − pour ranger l'UI")
-print("📌 Bouton X pour fermer la fenêtre")
-print("📌 Bouton flottant déplaçable (position sauvegardée)")
-print("📌 Drag toggle en bas de la fenêtre")
