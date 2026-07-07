@@ -32,10 +32,10 @@ local Scripts = {
     },
 }
 
--- ===== GESTION DES PRÉFÉRENCES (SAUVEGARDE FICHIER LOCAL TELEPHONE) =====
-local PreferencesFile = "ScriptExecutor_Toggles.txt"
+-- ===== GESTION DES PRÉFÉRENCES =====
+local configFile = "ScriptExecutor_Config.json"
 
--- Fonction pour sauvegarder les toggles dans un fichier local
+-- Fonction pour sauvegarder la config
 local function SaveToggles()
     local data = {
         Toggles = {},
@@ -62,50 +62,47 @@ local function SaveToggles()
     local jsonData = HttpService:JSONEncode(data)
     
     local success, err = pcall(function()
-        writefile(PreferencesFile, jsonData)
+        writefile(configFile, jsonData)
     end)
     
     if success then
-        print("✅ Toggles sauvegardés dans le fichier local!")
+        print("✅ Config sauvegardée !")
     else
         warn("❌ Erreur de sauvegarde: " .. err)
     end
 end
 
--- Fonction pour charger les toggles depuis le fichier local
+-- Fonction pour charger la config
 local function LoadToggles()
-    local fileExists, _ = pcall(function()
-        return isfile(PreferencesFile)
-    end)
-    
-    if not fileExists then
-        print("📝 Fichier local inexistant, création avec valeurs par défaut...")
+    if not isfile(configFile) then
+        print("📝 Aucune config trouvée, création par défaut...")
         SaveToggles()
         return
     end
-    
+
+    local data = nil
     local success, jsonData = pcall(function()
-        return readfile(PreferencesFile)
+        return readfile(configFile)
     end)
     
     if not success then
-        print("❌ Erreur de lecture du fichier, création d'un nouveau...")
+        print("❌ Erreur de lecture, création d'une nouvelle config...")
         SaveToggles()
         return
     end
     
-    local data = nil
     local decodeSuccess, decodedData = pcall(function()
         return HttpService:JSONDecode(jsonData)
     end)
     
     if not decodeSuccess then
-        print("❌ Erreur de décodage JSON, création d'un nouveau fichier...")
+        print("❌ Erreur de décodage, création d'une nouvelle config...")
         SaveToggles()
         return
     end
     
     data = decodedData
+    print("✅ Config chargée !")
     
     if data.Toggles then
         for i, toggleState in pairs(data.Toggles) do
@@ -148,8 +145,6 @@ local function LoadToggles()
             DragToggleLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
         end
     end
-    
-    print("✅ Toggles chargés depuis le fichier local!")
 end
 
 -- Variables de contrôle
@@ -558,7 +553,7 @@ end)
 FloatButton.InputEnded:Connect(function()
     if FloatDragging then
         FloatDragging = false
-        SaveToggles()  -- Sauvegarde la position du bouton flottant
+        SaveToggles()
     end
     
     if FloatIsClick and (tick() - FloatClickTime) < 0.3 then
@@ -891,14 +886,10 @@ UpdateCanvasSize()
 
 -- Fonctions de la fenêtre
 local function MinimizeWindow()
-    -- Sauvegarder la position actuelle du bouton flottant avant de le cacher
     SaveToggles()
-    
     MainFrame.Visible = false
     FloatButton.Visible = true
     
-    -- Utiliser la position sauvegardée du bouton flottant
-    -- La position est déjà chargée depuis le fichier
     FloatButton.Size = UDim2.new(0, 35, 0, 35)
     TweenService:Create(FloatButton, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
         Size = UDim2.new(0, 50, 0, 50)
@@ -913,6 +904,7 @@ end
 local function CloseWindow()
     SaveToggles()
     MainFrame.Visible = false
+    FloatButton.Visible = false
     print("👻 Fenêtre fermée - Utilisez _G.ShowScriptExecutor() pour réouvrir")
 end
 
@@ -921,7 +913,7 @@ MinimizeButton.MouseButton1Click:Connect(MinimizeWindow)
 FloatButton.MouseButton1Click:Connect(ShowWindow)
 CloseButton.MouseButton1Click:Connect(CloseWindow)
 
--- Charger les toggles au démarrage
+-- Charger la config au démarrage
 LoadToggles()
 
 -- Mettre à jour l'interface avec les toggles chargés
@@ -1028,10 +1020,8 @@ _G.SaveToggles = SaveToggles
 _G.LoadToggles = LoadToggles
 
 print("✅ Script Executor chargé!")
-print("📌 Toggle ON/OFF par script avec sauvegarde FICHIER LOCAL")
-print("📌 Fichier: " .. PreferencesFile)
-print("📌 Bouton − pour ranger l'UI (position sauvegardée)")
+print("📌 Fichier de config: " .. configFile)
+print("📌 Bouton − pour ranger l'UI")
 print("📌 Bouton X pour fermer la fenêtre")
 print("📌 Bouton flottant déplaçable (position sauvegardée)")
 print("📌 Drag toggle en bas de la fenêtre")
-print("📌 ZIndex max pour tout")
