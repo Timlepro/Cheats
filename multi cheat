@@ -25,14 +25,14 @@ local Scripts = {
         PlaceIds = {1537690962}
     },
     {
-        Name = "GAG 2 Roll Back",
-        Url = "https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua",
+        Name = "GAG 2",
+        Url = "https://api.luarmor.net/files/v4/loaders/795c7accd08487171484e54a92e75c77.lua",
         requirePlaceId = true,
         PlaceIds = {97598239454123}
     },
     {
-        Name = "GAG 2",
-        Url = "http://luminon.top/loader.lua",
+        Name = "Gag 2 roll back",
+        Url = "https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua",
         requirePlaceId = true,
         PlaceIds = {97598239454123}
     },
@@ -457,6 +457,7 @@ FloatButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
+-- Fonction pour exécuter un script (identique au bouton Run)
 local function ExecuteScript(url, scriptName)
     if not url or url == "" then
         return false
@@ -464,6 +465,7 @@ local function ExecuteScript(url, scriptName)
     
     local success = false
     
+    -- Si c'est un loadstring direct
     if string.sub(url, 1, 10) == "loadstring" then
         success = pcall(function()
             loadstring(url)()
@@ -471,6 +473,7 @@ local function ExecuteScript(url, scriptName)
         return success
     end
     
+    -- Si c'est une URL Luarmor ou autre
     local httpSuccess, response = pcall(function()
         return game:HttpGet(url)
     end)
@@ -479,9 +482,14 @@ local function ExecuteScript(url, scriptName)
         return false
     end
     
+    -- Exécuter le script exactement comme le bouton Run
     local func, err = loadstring(response)
     if not func then
-        return false
+        -- Si loadstring échoue, essayer d'exécuter directement
+        success = pcall(function()
+            loadstring(response)()
+        end)
+        return success
     end
     
     success = pcall(function()
@@ -516,13 +524,12 @@ local function ShouldAutoExecute(scriptData, index)
 end
 
 local function ExecuteAutoScripts()
-    local executed = false
     for i = 1, #Scripts do
         if ShouldAutoExecute(Scripts[i], i) and not ExecutedScripts[i] then
+            -- Appeler ExecuteScript de la même manière que le bouton Run
             local success = ExecuteScript(Scripts[i].Url, Scripts[i].Name)
             if success then
                 ExecutedScripts[i] = true
-                executed = true
                 local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
                 if item then
                     local indicator = item:FindFirstChild("AutoIndicator")
@@ -531,11 +538,9 @@ local function ExecuteAutoScripts()
                         indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
                     end
                 end
+                SaveToggles()
             end
         end
-    end
-    if executed then
-        SaveToggles()
     end
 end
 
@@ -701,6 +706,7 @@ local function CreateScriptItem(scriptData, index)
         end)
     end
 
+    -- Bouton Run (exactement la même fonction que ExecuteAutoScripts)
     ExecuteButton.MouseButton1Click:Connect(function()
         if ExecuteButton.Text == "⏳..." then
             return
