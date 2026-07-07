@@ -32,10 +32,10 @@ local Scripts = {
     },
 }
 
--- ===== GESTION DES PRÉFÉRENCES (SAUVEGARDE LOCALE TELEPHONE) =====
-local PreferencesFile = "ScriptExecutor_Toggles"
+-- ===== GESTION DES PRÉFÉRENCES (SAUVEGARDE FICHIER LOCAL TELEPHONE) =====
+local PreferencesFile = "ScriptExecutor_Toggles.txt"
 
--- Fonction pour sauvegarder les toggles (local storage du téléphone)
+-- Fonction pour sauvegarder les toggles dans un fichier local
 local function SaveToggles()
     local data = {
         Toggles = {},
@@ -49,7 +49,7 @@ local function SaveToggles()
     end
     
     for i, executed in pairs(ExecutedScripts) do
-        data.ExecutedScripts[i] = executed  -- CORRECTION : ajout du "="
+        data.ExecutedScripts[i] = executed
     end
     
     data.FloatPosition = {
@@ -62,70 +62,76 @@ local function SaveToggles()
     local jsonData = HttpService:JSONEncode(data)
     
     local success, err = pcall(function()
-        setclipboard(jsonData)
+        writefile(PreferencesFile, jsonData)
     end)
     
     if success then
-        print("✅ Toggles sauvegardés localement sur le téléphone!")
+        print("✅ Toggles sauvegardés dans le fichier local!")
     else
-        warn("❌ Erreur de sauvegarde locale: " .. err)
+        warn("❌ Erreur de sauvegarde: " .. err)
     end
 end
 
--- Fonction pour charger les toggles (local storage du téléphone)
+-- Fonction pour charger les toggles depuis le fichier local
 local function LoadToggles()
-    local jsonData = nil
-    
-    local success, data = pcall(function()
-        return getclipboard()
+    local fileExists, _ = pcall(function()
+        return isfile(PreferencesFile)
     end)
     
-    if not success or not data or data == "" then
-        print("📝 Aucune donnée locale trouvée, création avec valeurs par défaut...")
+    if not fileExists then
+        print("📝 Fichier local inexistant, création avec valeurs par défaut...")
         SaveToggles()
         return
     end
     
-    jsonData = data
+    local success, jsonData = pcall(function()
+        return readfile(PreferencesFile)
+    end)
     
-    local decodedData = nil
-    local decodeSuccess, result = pcall(function()
+    if not success then
+        print("❌ Erreur de lecture du fichier, création d'un nouveau...")
+        SaveToggles()
+        return
+    end
+    
+    local data = nil
+    local decodeSuccess, decodedData = pcall(function()
         return HttpService:JSONDecode(jsonData)
     end)
     
     if not decodeSuccess then
-        print("❌ Erreur de décodage des données locales, création de nouvelles...")
+        print("❌ Erreur de décodage JSON, création d'un nouveau fichier...")
         SaveToggles()
         return
     end
     
-    decodedData = result
+    data = decodedData
     
-    if decodedData.Toggles then
-        for i, toggleState in pairs(decodedData.Toggles) do
+    if data.Toggles then
+        for i, toggleState in pairs(data.Toggles) do
             if ScriptToggles[i] ~= nil then
                 ScriptToggles[i] = toggleState
             end
         end
     end
     
-    if decodedData.ExecutedScripts then
-        for i, executed in pairs(decodedData.ExecutedScripts) do
+    if data.ExecutedScripts then
+        for i, executed in pairs(data.ExecutedScripts) do
             ExecutedScripts[i] = executed
         end
     end
     
-    if decodedData.FloatPosition then
+    if data.FloatPosition then
         FloatButton.Position = UDim2.new(
-            decodedData.FloatPosition.X or 0.5,
-            decodedData.FloatPosition.XOffset or -25,
-            decodedData.FloatPosition.Y or 0.02,
-            decodedData.FloatPosition.YOffset or 0
+            data.FloatPosition.X or 0.5,
+            data.FloatPosition.XOffset or -25,
+            data.FloatPosition.Y or 0.02,
+            data.FloatPosition.YOffset or 0
         )
     end
     
-    if decodedData.DragEnabled ~= nil then
-        DragEnabled = decodedData.DragEnabled
+    if data.DragEnabled ~= nil then
+        DragEnabled = data.DragEnabled
         if DragEnabled then
             DragToggleButton.Text = "✅ ON"
             DragToggleButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
@@ -143,7 +149,7 @@ local function LoadToggles()
         end
     end
     
-    print("✅ Toggles chargés depuis le stockage local du téléphone!")
+    print("✅ Toggles chargés depuis le fichier local!")
 end
 
 -- Variables de contrôle
@@ -552,7 +558,7 @@ end)
 FloatButton.InputEnded:Connect(function()
     if FloatDragging then
         FloatDragging = false
-        SaveToggles()
+        SaveToggles()  -- Sauvegarde la position du bouton flottant
     end
     
     if FloatIsClick and (tick() - FloatClickTime) < 0.3 then
@@ -885,14 +891,17 @@ UpdateCanvasSize()
 
 -- Fonctions de la fenêtre
 local function MinimizeWindow()
+    -- Sauvegarder la position actuelle du bouton flottant avant de le cacher
+    SaveToggles()
+    
     MainFrame.Visible = false
     FloatButton.Visible = true
     
+    -- Utiliser la position sauvegardée du bouton flottant
+    -- La position est déjà chargée depuis le fichier
     FloatButton.Size = UDim2.new(0, 35, 0, 35)
-    FloatButton.Position = UDim2.new(0.5, -17.5, 0.02, 0)
     TweenService:Create(FloatButton, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-        Size = UDim2.new(0, 50, 0, 50),
-        Position = UDim2.new(0.5, -25, 0.02, 0)
+        Size = UDim2.new(0, 50, 0, 50)
     }):Play()
 end
 
@@ -902,6 +911,7 @@ local function ShowWindow()
 end
 
 local function CloseWindow()
+    SaveToggles()
     MainFrame.Visible = false
     print("👻 Fenêtre fermée - Utilisez _G.ShowScriptExecutor() pour réouvrir")
 end
@@ -1018,9 +1028,9 @@ _G.SaveToggles = SaveToggles
 _G.LoadToggles = LoadToggles
 
 print("✅ Script Executor chargé!")
-print("📌 Toggle ON/OFF par script avec sauvegarde LOCALE TELEPHONE")
-print("📌 Utilisation de getclipboard/setclipboard pour le stockage local")
-print("📌 Bouton − pour ranger l'UI (bouton flottant)")
+print("📌 Toggle ON/OFF par script avec sauvegarde FICHIER LOCAL")
+print("📌 Fichier: " .. PreferencesFile)
+print("📌 Bouton − pour ranger l'UI (position sauvegardée)")
 print("📌 Bouton X pour fermer la fenêtre")
 print("📌 Bouton flottant déplaçable (position sauvegardée)")
 print("📌 Drag toggle en bas de la fenêtre")
