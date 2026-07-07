@@ -27,8 +27,8 @@ local Scripts = {
     {
         Name = "Gag 2 roll back",
         Url = "http://luminon.top/loader.lua",
-        requirePlaceId = false,
-        PlaceIds = {}
+        requirePlaceId = True,
+        PlaceIds = {97598239454123}
     },
 }
 
