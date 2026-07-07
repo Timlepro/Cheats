@@ -1,9 +1,3 @@
---[[
-    Script UI Mobile/PC - Popup déplaçable avec exécution de scripts
-    Version avec Toggle par script et sauvegarde des préférences
-    À mettre dans un LocalScript dans StarterPlayerScripts
-]]
-
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
@@ -11,9 +5,6 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 
--- Configuration des scripts
--- requirePlaceId = true  -> Le script ne s'exécute que dans les PlaceIds spécifiés
--- requirePlaceId = false -> Le script s'exécute partout (ignorer les PlaceIds)
 local Scripts = {
     {
         Name = "Make Someone Fly",
