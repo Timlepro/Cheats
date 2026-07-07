@@ -27,7 +27,7 @@ local Scripts = {
     {
         Name = "Gag 2 roll back",
         Url = "http://luminon.top/loader.lua",
-        requirePlaceId = True,
+        requirePlaceId = true,
         PlaceIds = {97598239454123}
     },
 }
@@ -116,7 +116,7 @@ end
 -- Variables de contrôle
 local CurrentPlaceId = game.PlaceId
 local ExecutedScripts = {}
-local ScriptToggles = {} -- État des toggles par script
+local ScriptToggles = {}
 
 -- Initialiser les toggles (tous à false par défaut)
 for i in ipairs(Scripts) do
@@ -251,7 +251,7 @@ MinimizeButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- Bouton X (détruire)
+-- Bouton X (fermer la fenêtre)
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
@@ -259,7 +259,7 @@ CloseButton.Position = UDim2.new(1, -40, 0, 7)
 CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 CloseButton.BackgroundTransparency = 0.3
 CloseButton.BorderSizePixel = 0
-CloseButton.Text = "X"
+CloseButton.Text = "✕"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
@@ -309,12 +309,12 @@ ScriptList.Padding = UDim.new(0, 8)
 ScriptList.SortOrder = Enum.SortOrder.LayoutOrder
 ScriptList.Parent = ScrollFrame
 
--- Variables pour le déplacement
+-- Variables pour le déplacement de la fenêtre principale
 local Dragging = false
 local DragStart = nil
 local StartPos = nil
 
--- Bouton flottant pour réouvrir (après minimisation)
+-- Bouton flottant pour réouvrir (après minimisation) - DÉPLAÇABLE
 local FloatButton = Instance.new("ImageButton")
 FloatButton.Name = "FloatButton"
 FloatButton.Size = UDim2.new(0, 50, 0, 50)
@@ -342,6 +342,37 @@ FloatLabel.TextSize = 18
 FloatLabel.Font = Enum.Font.GothamBold
 FloatLabel.Parent = FloatButton
 
+-- Variables pour le déplacement du bouton flottant
+local FloatDragging = false
+local FloatDragStart = nil
+local FloatStartPos = nil
+
+-- Gestion du déplacement du bouton flottant
+FloatButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        FloatDragging = true
+        FloatDragStart = input.Position
+        FloatStartPos = FloatButton.Position
+    end
+end)
+
+FloatButton.InputChanged:Connect(function(input)
+    if FloatDragging then
+        local delta = input.Position - FloatDragStart
+        FloatButton.Position = UDim2.new(
+            FloatStartPos.X.Scale,
+            FloatStartPos.X.Offset + delta.X,
+            FloatStartPos.Y.Scale,
+            FloatStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+FloatButton.InputEnded:Connect(function()
+    FloatDragging = false
+end)
+
+-- Animation du bouton flottant au survol
 FloatButton.MouseEnter:Connect(function()
     TweenService:Create(FloatButton, TweenInfo.new(0.2), {
         Size = UDim2.new(0, 55, 0, 55),
@@ -553,7 +584,6 @@ local function CreateScriptItem(scriptData, index)
             ToggleButton.BorderColor3 = Color3.fromRGB(40, 180, 80)
             ToggleButton.TextColor3 = Color3.fromRGB(180, 255, 200)
             
-            -- Vérifier si on doit exécuter auto
             if ShouldAutoExecute(scriptData, index) and not ExecutedScripts[index] then
                 local success = ExecuteScript(scriptData.Url, scriptData.Name)
                 if success then
@@ -567,7 +597,6 @@ local function CreateScriptItem(scriptData, index)
             ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
             ToggleButton.BorderColor3 = Color3.fromRGB(180, 40, 40)
             ToggleButton.TextColor3 = Color3.fromRGB(255, 180, 180)
-            -- Réinitialiser l'état exécuté
             ExecutedScripts[index] = false
             AutoIndicator.Text = "⏳ En attente"
             AutoIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
@@ -636,7 +665,6 @@ local function CreateScriptItem(scriptData, index)
         ExecuteButton.Text = oldText
         ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
         
-        -- Si le script est en auto et réussi, marquer comme exécuté
         if ScriptToggles[index] and ShouldAutoExecute(scriptData, index) then
             ExecutedScripts[index] = true
             AutoIndicator.Text = "✅ Exécuté"
@@ -677,18 +705,20 @@ local function ShowWindow()
     FloatButton.Visible = false
 end
 
-local function DestroyScript()
-    SaveToggles() -- Sauvegarder avant de détruire
-    ScreenGui:Destroy()
-    print("✅ Script Executor détruit")
+-- FERMER LA FENÊTRE (pas détruire)
+local function CloseWindow()
+    MainFrame.Visible = false
+    -- Ne pas afficher le bouton flottant, la fenêtre est juste fermée
+    -- On peut la réouvrir avec _G.ShowScriptExecutor()
+    print("👻 Fenêtre fermée - Utilisez _G.ShowScriptExecutor() pour réouvrir")
 end
 
 -- Boutons
 MinimizeButton.MouseButton1Click:Connect(MinimizeWindow)
 FloatButton.MouseButton1Click:Connect(ShowWindow)
-CloseButton.MouseButton1Click:Connect(DestroyScript)
+CloseButton.MouseButton1Click:Connect(CloseWindow)
 
--- Fonction de déplacement
+-- Fonction de déplacement de la fenêtre principale
 local function StartDrag(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         Dragging = true
@@ -755,7 +785,6 @@ RunService.RenderStepped:Connect(function()
     if game.PlaceId ~= CurrentPlaceId then
         CurrentPlaceId = game.PlaceId
         ExecutedScripts = {}
-        -- Mettre à jour les indicateurs
         for i in ipairs(Scripts) do
             local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
             if item then
@@ -817,7 +846,7 @@ end)
 
 -- Fonctions globales
 _G.ShowScriptExecutor = ShowWindow
-_G.DestroyScriptExecutor = DestroyScript
+_G.CloseScriptExecutor = CloseWindow
 _G.ExecuteAutoScripts = ExecuteAutoScripts
 _G.SaveToggles = SaveToggles
 _G.LoadToggles = LoadToggles
@@ -825,5 +854,6 @@ _G.LoadToggles = LoadToggles
 print("✅ Script Executor chargé!")
 print("📌 Toggle ON/OFF par script avec sauvegarde")
 print("📌 Bouton − pour réduire")
-print("📌 Bouton ✕ pour détruire")
+print("📌 Bouton ✕ pour fermer la fenêtre")
+print("📌 Bouton flottant déplaçable")
 print("📌 Fichier de préférences: " .. PreferencesFile)
