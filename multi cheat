@@ -34,8 +34,8 @@ local Scripts = {
         PlaceIds = {}
     },
     {
-        Name = "None",
-        Url = "https://raw.githubusercontent.com/votre-repo/script3.lua",
+        Name = "Gag 2 roll back",
+        Url = "loadstring(game:HttpGet("https://raw.githubusercontent.com/hanniii1/Loader/refs/heads/main/BFLoader.lua))()",
         requirePlaceId = false,
         PlaceIds = {}
     },
