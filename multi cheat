@@ -32,28 +32,26 @@ local Scripts = {
     },
 }
 
--- ===== GESTION DES PRÉFÉRENCES =====
+-- ===== GESTION DES PRÉFÉRENCES (LOCAL = DELTA EXECUTOR) =====
 local PreferencesFile = "ScriptExecutor_Toggles.txt"
 
--- Fonction pour sauvegarder les toggles
+-- Fonction pour sauvegarder les toggles (local)
 local function SaveToggles()
     local data = {
         Toggles = {},
         ExecutedScripts = {},
-        FloatPosition = {}
+        FloatPosition = {},
+        DragEnabled = DragEnabled
     }
     
-    -- Sauvegarder les toggles
     for i, toggleState in pairs(ScriptToggles) do
         data.Toggles[i] = toggleState
     end
     
-    -- Sauvegarder les scripts exécutés
     for i, executed in pairs(ExecutedScripts) do
         data.ExecutedScripts[i] = executed
     end
     
-    -- Sauvegarder la position du bouton flottant
     data.FloatPosition = {
         X = FloatButton.Position.X.Scale,
         XOffset = FloatButton.Position.X.Offset,
@@ -63,39 +61,43 @@ local function SaveToggles()
     
     local jsonData = HttpService:JSONEncode(data)
     
+    -- Sauvegarde locale (Delta Executor)
     local success, err = pcall(function()
         writefile(PreferencesFile, jsonData)
     end)
     
     if success then
-        print("✅ Toggles sauvegardés!")
+        print("✅ Toggles sauvegardés localement!")
     else
-        warn("❌ Erreur de sauvegarde: " .. err)
+        warn("❌ Erreur de sauvegarde locale: " .. err)
     end
 end
 
--- Fonction pour charger les toggles
+-- Fonction pour charger les toggles (local)
 local function LoadToggles()
+    -- Vérifier si le fichier existe localement
     local fileExists, _ = pcall(function()
         return isfile(PreferencesFile)
     end)
     
     if not fileExists then
-        print("📝 Fichier de préférences inexistant, création avec valeurs par défaut...")
+        print("📝 Fichier local inexistant, création avec valeurs par défaut...")
         SaveToggles()
         return
     end
     
+    -- Lire le fichier local
     local success, jsonData = pcall(function()
         return readfile(PreferencesFile)
     end)
     
     if not success then
-        print("❌ Erreur de lecture du fichier, création d'un nouveau...")
+        print("❌ Erreur de lecture du fichier local, création d'un nouveau...")
         SaveToggles()
         return
     end
     
+    -- Décoder le JSON
     local data = nil
     local decodeSuccess, decodedData = pcall(function()
         return HttpService:JSONDecode(jsonData)
@@ -135,7 +137,29 @@ local function LoadToggles()
         )
     end
     
-    print("✅ Toggles chargés avec succès!")
+    -- Appliquer l'état du drag
+    if data.DragEnabled ~= nil then
+        DragEnabled = data.DragEnabled
+        if DragEnabled then
+            DragToggleButton.Text = "✅ ON"
+            DragToggleButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+            DragToggleButton.BorderColor3 = Color3.fromRGB(40, 180, 80)
+            DragToggleButton.TextColor3 = Color3.fromRGB(180, 255, 200)
+            DragToggleLabel.Text = "🚀 Drag: ON"
+            DragToggleLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+            TitleBar.BackgroundTransparency = 0.5
+        else
+            DragToggleButton.Text = "❌ OFF"
+            DragToggleButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+            DragToggleButton.BorderColor3 = Color3.fromRGB(180, 40, 40)
+            DragToggleButton.TextColor3 = Color3.fromRGB(255, 180, 180)
+            DragToggleLabel.Text = "🔒 Drag: OFF"
+            DragToggleLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            TitleBar.BackgroundTransparency = 0.8
+        end
+    end
+    
+    print("✅ Toggles chargés depuis le fichier local!")
 end
 
 -- Variables de contrôle
@@ -143,7 +167,6 @@ local CurrentPlaceId = game.PlaceId
 local ExecutedScripts = {}
 local ScriptToggles = {}
 
--- Initialiser les toggles (tous à false par défaut)
 for i in ipairs(Scripts) do
     ScriptToggles[i] = false
 end
@@ -197,6 +220,7 @@ MainFrame.BorderColor3 = Color3.fromRGB(60, 60, 70)
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 MainFrame.Visible = true
+MainFrame.ZIndex = 10
 
 local function UpdateMainFrameSize()
     local width, height = GetAdaptiveSize()
@@ -213,6 +237,7 @@ GlassEffect.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 GlassEffect.BackgroundTransparency = 0.3
 GlassEffect.BorderSizePixel = 0
 GlassEffect.Parent = MainFrame
+GlassEffect.ZIndex = 1
 
 local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, 10)
@@ -226,6 +251,7 @@ TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 TitleBar.BackgroundTransparency = 0.5
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
+TitleBar.ZIndex = 2
 
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 10)
@@ -234,7 +260,7 @@ TitleCorner.Parent = TitleBar
 -- Titre
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.Size = UDim2.new(0.5, 0, 1, 0)
+Title.Size = UDim2.new(0.4, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "📁 Script Executor"
@@ -243,6 +269,7 @@ Title.TextSize = GetAdaptiveFontSize()
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
+Title.ZIndex = 3
 
 -- Bouton réduire ( - )
 local MinimizeButton = Instance.new("TextButton")
@@ -257,6 +284,7 @@ MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeButton.TextSize = 22
 MinimizeButton.Font = Enum.Font.GothamBold
 MinimizeButton.Parent = TitleBar
+MinimizeButton.ZIndex = 3
 
 local MinCorner = Instance.new("UICorner")
 MinCorner.CornerRadius = UDim.new(0, 5)
@@ -289,6 +317,7 @@ CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
 CloseButton.Parent = TitleBar
+CloseButton.ZIndex = 3
 
 local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 5)
@@ -315,11 +344,12 @@ ContentContainer.Size = UDim2.new(1, 0, 1, -45)
 ContentContainer.Position = UDim2.new(0, 0, 0, 45)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.Parent = MainFrame
+ContentContainer.ZIndex = 2
 
 -- ScrollView
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "ScrollFrame"
-ScrollFrame.Size = UDim2.new(0.95, 0, 0.9, 0)
+ScrollFrame.Size = UDim2.new(0.95, 0, 0.85, 0)
 ScrollFrame.Position = UDim2.new(0.025, 0, 0.05, 0)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
@@ -327,6 +357,7 @@ ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 ScrollFrame.ScrollBarThickness = 6
 ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
 ScrollFrame.Parent = ContentContainer
+ScrollFrame.ZIndex = 2
 
 -- Liste des scripts
 local ScriptList = Instance.new("UIListLayout")
@@ -334,14 +365,137 @@ ScriptList.Padding = UDim.new(0, 8)
 ScriptList.SortOrder = Enum.SortOrder.LayoutOrder
 ScriptList.Parent = ScrollFrame
 
+-- ===== BOUTON TOGGLE DRAG (en bas de la fenêtre) =====
+local DragToggleFrame = Instance.new("Frame")
+DragToggleFrame.Name = "DragToggleFrame"
+DragToggleFrame.Size = UDim2.new(0.95, 0, 0.08, 0)
+DragToggleFrame.Position = UDim2.new(0.025, 0, 0.92, 0)
+DragToggleFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+DragToggleFrame.BackgroundTransparency = 0.3
+DragToggleFrame.BorderSizePixel = 1
+DragToggleFrame.BorderColor3 = Color3.fromRGB(50, 50, 65)
+DragToggleFrame.Parent = ContentContainer
+DragToggleFrame.ZIndex = 3
+
+local DragToggleCorner = Instance.new("UICorner")
+DragToggleCorner.CornerRadius = UDim.new(0, 6)
+DragToggleCorner.Parent = DragToggleFrame
+
+-- Texte "Drag: ON/OFF"
+local DragToggleLabel = Instance.new("TextLabel")
+DragToggleLabel.Name = "DragToggleLabel"
+DragToggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+DragToggleLabel.Position = UDim2.new(0.05, 0, 0, 0)
+DragToggleLabel.BackgroundTransparency = 1
+DragToggleLabel.Text = "🚀 Drag: ON"
+DragToggleLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+DragToggleLabel.TextSize = GetAdaptiveFontSize() - 2
+DragToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+DragToggleLabel.Font = Enum.Font.GothamBold
+DragToggleLabel.Parent = DragToggleFrame
+DragToggleLabel.ZIndex = 4
+
+-- Bouton toggle drag
+local DragToggleButton = Instance.new("TextButton")
+DragToggleButton.Name = "DragToggleButton"
+DragToggleButton.Size = UDim2.new(0, 80, 0, 30)
+DragToggleButton.Position = UDim2.new(0.7, 0, 0.5, -15)
+DragToggleButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+DragToggleButton.BackgroundTransparency = 0.2
+DragToggleButton.BorderSizePixel = 1
+DragToggleButton.BorderColor3 = Color3.fromRGB(40, 180, 80)
+DragToggleButton.Text = "✅ ON"
+DragToggleButton.TextColor3 = Color3.fromRGB(180, 255, 200)
+DragToggleButton.TextSize = GetAdaptiveFontSize() - 4
+DragToggleButton.Font = Enum.Font.GothamBold
+DragToggleButton.Parent = DragToggleFrame
+DragToggleButton.ZIndex = 4
+DragToggleButton.AutoButtonColor = false
+
+local DragToggleCorner = Instance.new("UICorner")
+DragToggleCorner.CornerRadius = UDim.new(0, 5)
+DragToggleCorner.Parent = DragToggleButton
+
+-- Variable pour le drag
+local DragEnabled = true
+
+-- Fonction du toggle drag
+local function ToggleDrag()
+    DragEnabled = not DragEnabled
+    
+    if DragEnabled then
+        DragToggleButton.Text = "✅ ON"
+        DragToggleButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+        DragToggleButton.BorderColor3 = Color3.fromRGB(40, 180, 80)
+        DragToggleButton.TextColor3 = Color3.fromRGB(180, 255, 200)
+        DragToggleLabel.Text = "🚀 Drag: ON"
+        DragToggleLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        TitleBar.BackgroundTransparency = 0.5
+    else
+        DragToggleButton.Text = "❌ OFF"
+        DragToggleButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+        DragToggleButton.BorderColor3 = Color3.fromRGB(180, 40, 40)
+        DragToggleButton.TextColor3 = Color3.fromRGB(255, 180, 180)
+        DragToggleLabel.Text = "🔒 Drag: OFF"
+        DragToggleLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        TitleBar.BackgroundTransparency = 0.8
+    end
+    
+    SaveToggles()
+end
+
+DragToggleButton.MouseButton1Click:Connect(ToggleDrag)
+
+-- Animation au survol
+DragToggleButton.MouseEnter:Connect(function()
+    TweenService:Create(DragToggleButton, TweenInfo.new(0.2), {
+        BackgroundTransparency = 0.1
+    }):Play()
+end)
+
+DragToggleButton.MouseLeave:Connect(function()
+    TweenService:Create(DragToggleButton, TweenInfo.new(0.2), {
+        BackgroundTransparency = 0.2
+    }):Play()
+end)
+
 -- Variables pour le déplacement de la fenêtre principale
 local Dragging = false
 local DragStart = nil
 local StartPos = nil
-local IsClick = false
-local ClickTime = 0
 
--- Bouton flottant pour réouvrir (après minimisation) - DÉPLAÇABLE
+-- Fonction de déplacement de la fenêtre principale (avec toggle drag)
+local function StartDrag(input)
+    if not DragEnabled then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        Dragging = true
+        DragStart = input.Position
+        StartPos = MainFrame.Position
+    end
+end
+
+local function UpdateDrag(input)
+    if not DragEnabled then return end
+    if Dragging then
+        local delta = input.Position - DragStart
+        MainFrame.Position = UDim2.new(
+            StartPos.X.Scale,
+            StartPos.X.Offset + delta.X,
+            StartPos.Y.Scale,
+            StartPos.Y.Offset + delta.Y
+        )
+    end
+end
+
+local function EndDrag()
+    Dragging = false
+end
+
+TitleBar.InputBegan:Connect(StartDrag)
+TitleBar.InputChanged:Connect(UpdateDrag)
+TitleBar.InputEnded:Connect(EndDrag)
+
+-- Bouton flottant pour réouvrir (après minimisation)
 local FloatButton = Instance.new("ImageButton")
 FloatButton.Name = "FloatButton"
 FloatButton.Size = UDim2.new(0, 50, 0, 50)
@@ -354,6 +508,7 @@ FloatButton.Image = "rbxassetid://7072718680"
 FloatButton.ImageColor3 = Color3.fromRGB(200, 200, 220)
 FloatButton.Visible = false
 FloatButton.Parent = ScreenGui
+FloatButton.ZIndex = 10
 
 local FloatCorner = Instance.new("UICorner")
 FloatCorner.CornerRadius = UDim.new(0, 12)
@@ -368,6 +523,7 @@ FloatLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
 FloatLabel.TextSize = 18
 FloatLabel.Font = Enum.Font.GothamBold
 FloatLabel.Parent = FloatButton
+FloatLabel.ZIndex = 11
 
 -- Variables pour le déplacement du bouton flottant
 local FloatDragging = false
@@ -376,7 +532,7 @@ local FloatStartPos = nil
 local FloatIsClick = false
 local FloatClickTime = 0
 
--- Gestion du déplacement du bouton flottant (avec priorité au drag)
+-- Gestion du déplacement du bouton flottant
 FloatButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         FloatIsClick = true
@@ -391,7 +547,6 @@ FloatButton.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         if FloatIsClick and FloatDragStart then
             local delta = input.Position - FloatDragStart
-            -- Si on a bougé de plus de 5 pixels, c'est un drag
             if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
                 FloatDragging = true
                 FloatIsClick = false
@@ -413,11 +568,10 @@ end)
 FloatButton.InputEnded:Connect(function()
     if FloatDragging then
         FloatDragging = false
-        SaveToggles() -- Sauvegarder la position
+        SaveToggles()
     end
     
     if FloatIsClick and (tick() - FloatClickTime) < 0.3 then
-        -- C'est un clic, pas un drag
         ShowWindow()
     end
     FloatIsClick = false
@@ -528,12 +682,13 @@ end
 local function CreateScriptItem(scriptData, index)
     local ItemFrame = Instance.new("Frame")
     ItemFrame.Name = "ScriptItem_" .. index
-    ItemFrame.Size = UDim2.new(1, -10, 0, 80)
+    ItemFrame.Size = UDim2.new(1, -10, 0, 75)
     ItemFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     ItemFrame.BackgroundTransparency = 0.3
     ItemFrame.BorderSizePixel = 1
     ItemFrame.BorderColor3 = Color3.fromRGB(50, 50, 65)
     ItemFrame.Parent = ScrollFrame
+    ItemFrame.ZIndex = 2
 
     local ItemCorner = Instance.new("UICorner")
     ItemCorner.CornerRadius = UDim.new(0, 6)
@@ -551,6 +706,7 @@ local function CreateScriptItem(scriptData, index)
     ScriptName.TextXAlignment = Enum.TextXAlignment.Left
     ScriptName.Font = Enum.Font.GothamBold
     ScriptName.Parent = ItemFrame
+    ScriptName.ZIndex = 3
 
     -- Info PlaceIds
     local PlaceInfo = Instance.new("TextLabel")
@@ -572,12 +728,13 @@ local function CreateScriptItem(scriptData, index)
     PlaceInfo.TextXAlignment = Enum.TextXAlignment.Left
     PlaceInfo.Font = Enum.Font.GothamMedium
     PlaceInfo.Parent = ItemFrame
+    PlaceInfo.ZIndex = 3
 
     -- Toggle Button (ON/OFF par script)
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Name = "ToggleButton"
-    ToggleButton.Size = UDim2.new(0, 55, 0, 28)
-    ToggleButton.Position = UDim2.new(0.5, -27.5, 0.5, -14)
+    ToggleButton.Size = UDim2.new(0, 55, 0, 26)
+    ToggleButton.Position = UDim2.new(0.5, -27.5, 0.5, -13)
     ToggleButton.BackgroundColor3 = ScriptToggles[index] and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
     ToggleButton.BackgroundTransparency = 0.2
     ToggleButton.BorderSizePixel = 1
@@ -587,6 +744,7 @@ local function CreateScriptItem(scriptData, index)
     ToggleButton.TextSize = GetAdaptiveFontSize() - 4
     ToggleButton.Font = Enum.Font.GothamBold
     ToggleButton.Parent = ItemFrame
+    ToggleButton.ZIndex = 3
     ToggleButton.AutoButtonColor = false
 
     local ToggleCorner = Instance.new("UICorner")
@@ -605,6 +763,7 @@ local function CreateScriptItem(scriptData, index)
     AutoIndicator.TextXAlignment = Enum.TextXAlignment.Center
     AutoIndicator.Font = Enum.Font.GothamMedium
     AutoIndicator.Parent = ItemFrame
+    AutoIndicator.ZIndex = 3
 
     -- Bouton exécuter manuel
     local ExecuteButton = Instance.new("TextButton")
@@ -620,6 +779,7 @@ local function CreateScriptItem(scriptData, index)
     ExecuteButton.TextSize = GetAdaptiveFontSize() - 4
     ExecuteButton.Font = Enum.Font.GothamBold
     ExecuteButton.Parent = ItemFrame
+    ExecuteButton.ZIndex = 3
     ExecuteButton.AutoButtonColor = false
 
     local ButtonCorner = Instance.new("UICorner")
@@ -735,7 +895,7 @@ end
 
 -- Mise à jour du CanvasSize
 local function UpdateCanvasSize()
-    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 88) + 10)
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 83) + 10)
 end
 UpdateCanvasSize()
 
@@ -767,45 +927,7 @@ end
 MinimizeButton.MouseButton1Click:Connect(MinimizeWindow)
 CloseButton.MouseButton1Click:Connect(CloseWindow)
 
--- Fonction de déplacement de la fenêtre principale (avec priorité au drag)
-TitleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        IsClick = true
-        ClickTime = tick()
-        Dragging = false
-        DragStart = input.Position
-        StartPos = MainFrame.Position
-    end
-end)
-
-TitleBar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        if IsClick and DragStart then
-            local delta = input.Position - DragStart
-            if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
-                Dragging = true
-                IsClick = false
-            end
-        end
-        
-        if Dragging and StartPos then
-            local delta = input.Position - DragStart
-            MainFrame.Position = UDim2.new(
-                StartPos.X.Scale,
-                StartPos.X.Offset + delta.X,
-                StartPos.Y.Scale,
-                StartPos.Y.Offset + delta.Y
-            )
-        end
-    end
-end)
-
-TitleBar.InputEnded:Connect(function()
-    Dragging = false
-    IsClick = false
-end)
-
--- Charger les toggles au démarrage
+-- Charger les toggles au démarrage (local)
 LoadToggles()
 
 -- Mettre à jour l'interface avec les toggles chargés
@@ -874,6 +996,8 @@ RunService.RenderStepped:Connect(function()
         
         local newFontSize = GetAdaptiveFontSize()
         Title.TextSize = newFontSize
+        DragToggleLabel.TextSize = newFontSize - 2
+        DragToggleButton.TextSize = newFontSize - 4
         
         for _, item in pairs(ScrollFrame:GetChildren()) do
             if item:IsA("Frame") and item.Name:match("ScriptItem") then
@@ -910,9 +1034,10 @@ _G.SaveToggles = SaveToggles
 _G.LoadToggles = LoadToggles
 
 print("✅ Script Executor chargé!")
-print("📌 Toggle ON/OFF par script avec sauvegarde")
+print("📌 Toggle ON/OFF par script avec sauvegarde LOCALE")
+print("📌 Fichier: " .. PreferencesFile)
 print("📌 Bouton − pour réduire")
 print("📌 Bouton X pour fermer la fenêtre")
 print("📌 Bouton flottant déplaçable (position sauvegardée)")
-print("📌 Drag & Click priorité au drag")
-print("📌 Fichier de préférences: " .. PreferencesFile)
+print("📌 Drag toggle en bas de la fenêtre")
+print("📌 ZIndex max pour tout")
