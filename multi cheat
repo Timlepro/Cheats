@@ -21,7 +21,7 @@ local Scripts = {
     {
         Name = "Bee Swarm UI",
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Bee%20Swarm%20UI",
-        requirePlaceId = True,
+        requirePlaceId = true,
         PlaceIds = {1537690962}
     },
     {
@@ -39,12 +39,27 @@ local PreferencesFile = "ScriptExecutor_Toggles.txt"
 local function SaveToggles()
     local data = {
         Toggles = {},
-        ExecutedScripts = ExecutedScripts
+        ExecutedScripts = {},
+        FloatPosition = {}
     }
     
+    -- Sauvegarder les toggles
     for i, toggleState in pairs(ScriptToggles) do
         data.Toggles[i] = toggleState
     end
+    
+    -- Sauvegarder les scripts exécutés
+    for i, executed in pairs(ExecutedScripts) do
+        data.ExecutedScripts[i] = executed
+    end
+    
+    -- Sauvegarder la position du bouton flottant
+    data.FloatPosition = {
+        X = FloatButton.Position.X.Scale,
+        XOffset = FloatButton.Position.X.Offset,
+        Y = FloatButton.Position.Y.Scale,
+        YOffset = FloatButton.Position.Y.Offset
+    }
     
     local jsonData = HttpService:JSONEncode(data)
     
@@ -108,6 +123,16 @@ local function LoadToggles()
         for i, executed in pairs(data.ExecutedScripts) do
             ExecutedScripts[i] = executed
         end
+    end
+    
+    -- Appliquer la position du bouton flottant
+    if data.FloatPosition then
+        FloatButton.Position = UDim2.new(
+            data.FloatPosition.X or 0.5,
+            data.FloatPosition.XOffset or -25,
+            data.FloatPosition.Y or 0.02,
+            data.FloatPosition.YOffset or 0
+        )
     end
     
     print("✅ Toggles chargés avec succès!")
@@ -259,7 +284,7 @@ CloseButton.Position = UDim2.new(1, -40, 0, 7)
 CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 CloseButton.BackgroundTransparency = 0.3
 CloseButton.BorderSizePixel = 0
-CloseButton.Text = "✕"
+CloseButton.Text = "X"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
@@ -313,6 +338,8 @@ ScriptList.Parent = ScrollFrame
 local Dragging = false
 local DragStart = nil
 local StartPos = nil
+local IsClick = false
+local ClickTime = 0
 
 -- Bouton flottant pour réouvrir (après minimisation) - DÉPLAÇABLE
 local FloatButton = Instance.new("ImageButton")
@@ -346,29 +373,54 @@ FloatLabel.Parent = FloatButton
 local FloatDragging = false
 local FloatDragStart = nil
 local FloatStartPos = nil
+local FloatIsClick = false
+local FloatClickTime = 0
 
--- Gestion du déplacement du bouton flottant
+-- Gestion du déplacement du bouton flottant (avec priorité au drag)
 FloatButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        FloatDragging = true
+        FloatIsClick = true
+        FloatClickTime = tick()
+        FloatDragging = false
         FloatDragStart = input.Position
         FloatStartPos = FloatButton.Position
     end
 end)
 
 FloatButton.InputChanged:Connect(function(input)
-    if FloatDragging then
-        local delta = input.Position - FloatDragStart
-        FloatButton.Position = UDim2.new(
-            FloatStartPos.X.Scale,
-            FloatStartPos.X.Offset + delta.X,
-            FloatStartPos.Y.Scale,
-            FloatStartPos.Y.Offset + delta.Y
-        )
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if FloatIsClick and FloatDragStart then
+            local delta = input.Position - FloatDragStart
+            -- Si on a bougé de plus de 5 pixels, c'est un drag
+            if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
+                FloatDragging = true
+                FloatIsClick = false
+            end
+        end
+        
+        if FloatDragging and FloatStartPos then
+            local delta = input.Position - FloatDragStart
+            FloatButton.Position = UDim2.new(
+                FloatStartPos.X.Scale,
+                FloatStartPos.X.Offset + delta.X,
+                FloatStartPos.Y.Scale,
+                FloatStartPos.Y.Offset + delta.Y
+            )
+        end
     end
 end)
 
 FloatButton.InputEnded:Connect(function()
+    if FloatDragging then
+        FloatDragging = false
+        SaveToggles() -- Sauvegarder la position
+    end
+    
+    if FloatIsClick and (tick() - FloatClickTime) < 0.3 then
+        -- C'est un clic, pas un drag
+        ShowWindow()
+    end
+    FloatIsClick = false
     FloatDragging = false
 end)
 
@@ -708,44 +760,50 @@ end
 -- FERMER LA FENÊTRE (pas détruire)
 local function CloseWindow()
     MainFrame.Visible = false
-    -- Ne pas afficher le bouton flottant, la fenêtre est juste fermée
-    -- On peut la réouvrir avec _G.ShowScriptExecutor()
     print("👻 Fenêtre fermée - Utilisez _G.ShowScriptExecutor() pour réouvrir")
 end
 
 -- Boutons
 MinimizeButton.MouseButton1Click:Connect(MinimizeWindow)
-FloatButton.MouseButton1Click:Connect(ShowWindow)
 CloseButton.MouseButton1Click:Connect(CloseWindow)
 
--- Fonction de déplacement de la fenêtre principale
-local function StartDrag(input)
+-- Fonction de déplacement de la fenêtre principale (avec priorité au drag)
+TitleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        Dragging = true
+        IsClick = true
+        ClickTime = tick()
+        Dragging = false
         DragStart = input.Position
         StartPos = MainFrame.Position
     end
-end
+end)
 
-local function UpdateDrag(input)
-    if Dragging then
-        local delta = input.Position - DragStart
-        MainFrame.Position = UDim2.new(
-            StartPos.X.Scale,
-            StartPos.X.Offset + delta.X,
-            StartPos.Y.Scale,
-            StartPos.Y.Offset + delta.Y
-        )
+TitleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        if IsClick and DragStart then
+            local delta = input.Position - DragStart
+            if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
+                Dragging = true
+                IsClick = false
+            end
+        end
+        
+        if Dragging and StartPos then
+            local delta = input.Position - DragStart
+            MainFrame.Position = UDim2.new(
+                StartPos.X.Scale,
+                StartPos.X.Offset + delta.X,
+                StartPos.Y.Scale,
+                StartPos.Y.Offset + delta.Y
+            )
+        end
     end
-end
+end)
 
-local function EndDrag()
+TitleBar.InputEnded:Connect(function()
     Dragging = false
-end
-
-TitleBar.InputBegan:Connect(StartDrag)
-TitleBar.InputChanged:Connect(UpdateDrag)
-TitleBar.InputEnded:Connect(EndDrag)
+    IsClick = false
+end)
 
 -- Charger les toggles au démarrage
 LoadToggles()
@@ -854,6 +912,7 @@ _G.LoadToggles = LoadToggles
 print("✅ Script Executor chargé!")
 print("📌 Toggle ON/OFF par script avec sauvegarde")
 print("📌 Bouton − pour réduire")
-print("📌 Bouton ✕ pour fermer la fenêtre")
-print("📌 Bouton flottant déplaçable")
+print("📌 Bouton X pour fermer la fenêtre")
+print("📌 Bouton flottant déplaçable (position sauvegardée)")
+print("📌 Drag & Click priorité au drag")
 print("📌 Fichier de préférences: " .. PreferencesFile)
