@@ -36,6 +36,12 @@ local Scripts = {
         requirePlaceId = true,
         PlaceIds = {97598239454123}
     },
+    {
+        Name = "Gag 2 spawn",
+        Url = "https://raw.githubusercontent.com/INF-Hub-PL/GrowaGarden2_/refs/heads/main/main_v1.5",
+        requirePlaceId = true,
+        PlaceIds = {97598239454123}
+    },
 }
 
 -- ===== GESTION DES PRÉFÉRENCES =====
