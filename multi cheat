@@ -30,18 +30,6 @@ local Scripts = {
         requirePlaceId = true,
         PlaceIds = {97598239454123}
     },
-    {
-        Name = "Gag 2 roll back",
-        Url = "https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua",
-        requirePlaceId = true,
-        PlaceIds = {97598239454123}
-    },
-    {
-        Name = "Gag 2 spawn",
-        Url = "https://raw.githubusercontent.com/INF-Hub-PL/GrowaGarden2_/refs/heads/main/main_v1.5",
-        requirePlaceId = true,
-        PlaceIds = {97598239454123}
-    },
 }
 
 -- ===== GESTION DES PRÉFÉRENCES =====
@@ -479,7 +467,7 @@ local function ExecuteScript(url, scriptName)
         return success
     end
     
-    -- Si c'est une URL Luarmor ou autre
+    -- Si c'est une URL (Luarmor ou autre)
     local httpSuccess, response = pcall(function()
         return game:HttpGet(url)
     end)
@@ -488,19 +476,18 @@ local function ExecuteScript(url, scriptName)
         return false
     end
     
-    -- Exécuter le script exactement comme le bouton Run
+    -- Essayer d'exécuter le script chargé
     local func, err = loadstring(response)
-    if not func then
+    if func then
+        success = pcall(function()
+            func()
+        end)
+    else
         -- Si loadstring échoue, essayer d'exécuter directement
         success = pcall(function()
             loadstring(response)()
         end)
-        return success
     end
-    
-    success = pcall(function()
-        func()
-    end)
     
     return success
 end
@@ -532,7 +519,6 @@ end
 local function ExecuteAutoScripts()
     for i = 1, #Scripts do
         if ShouldAutoExecute(Scripts[i], i) and not ExecutedScripts[i] then
-            -- Appeler ExecuteScript de la même manière que le bouton Run
             local success = ExecuteScript(Scripts[i].Url, Scripts[i].Name)
             if success then
                 ExecutedScripts[i] = true
@@ -712,7 +698,7 @@ local function CreateScriptItem(scriptData, index)
         end)
     end
 
-    -- Bouton Run (exactement la même fonction que ExecuteAutoScripts)
+    -- Bouton Run
     ExecuteButton.MouseButton1Click:Connect(function()
         if ExecuteButton.Text == "⏳..." then
             return
@@ -814,6 +800,7 @@ for i = 1, #Scripts do
     end
 end
 
+-- Exécution automatique après chargement
 task.wait(3)
 ExecuteAutoScripts()
 
