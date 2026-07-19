@@ -30,6 +30,12 @@ local Scripts = {
         requirePlaceId = true,
         PlaceIds = {97598239454123}
     },
+    {
+        Name = "Lumber Tycoon 2",
+        Url = "https://raw.githubusercontent.com/DevKron/Kron_Hub/refs/heads/main/version_1.0",
+        requirePlaceId = true,
+        PlaceIds = {13822889}
+    },
 }
 
 -- ===== GESTION DES PRÉFÉRENCES =====
