@@ -33,7 +33,7 @@ local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
 local function GetAdaptiveSize()
     local screenSize = workspace.CurrentCamera.ViewportSize
     local width = math.min(420, screenSize.X * 0.9)
-    local height = math.min(620, screenSize.Y * 0.9) -- augmenté pour la recherche
+    local height = math.min(620, screenSize.Y * 0.9)
 
     if IsMobile or IsSmallScreen then
         width = math.min(360, screenSize.X * 0.92)
@@ -92,7 +92,6 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 10)
 TitleCorner.Parent = TitleBar
 
--- Titre
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(0.6, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
@@ -128,7 +127,7 @@ CloseButton.Position = UDim2.new(1, -40, 0, 5)
 CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 CloseButton.BackgroundTransparency = 0.3
 CloseButton.BorderSizePixel = 0
-CloseButton.Text = "✕"
+CloseButton.Text = "X"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
@@ -174,7 +173,7 @@ ContentContainer.Parent = MainFrame
 
 -- Panneau de contrôle (distance + recherche)
 local ControlPanel = Instance.new("Frame")
-ControlPanel.Size = UDim2.new(0.95, 0, 0, 110) -- augmenté pour la recherche
+ControlPanel.Size = UDim2.new(0.95, 0, 0, 110)
 ControlPanel.Position = UDim2.new(0.025, 0, 0, 0)
 ControlPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 ControlPanel.BackgroundTransparency = 0.3
@@ -186,7 +185,7 @@ local ControlCorner = Instance.new("UICorner")
 ControlCorner.CornerRadius = UDim.new(0, 6)
 ControlCorner.Parent = ControlPanel
 
--- ---- Ligne distance ----
+-- Ligne distance
 local DistanceRow = Instance.new("Frame")
 DistanceRow.Size = UDim2.new(1, 0, 0, 30)
 DistanceRow.Position = UDim2.new(0, 0, 0, 0)
@@ -223,7 +222,7 @@ local BoxCorner = Instance.new("UICorner")
 BoxCorner.CornerRadius = UDim.new(0, 4)
 BoxCorner.Parent = DistanceBox
 
--- ---- Ligne slider ----
+-- Ligne slider
 local SliderRow = Instance.new("Frame")
 SliderRow.Size = UDim2.new(1, 0, 0, 30)
 SliderRow.Position = UDim2.new(0, 0, 0, 32)
@@ -266,7 +265,7 @@ local SliderCorner = Instance.new("UICorner")
 SliderCorner.CornerRadius = UDim.new(1, 0)
 SliderCorner.Parent = SliderButton
 
--- ---- Ligne recherche ----
+-- Ligne recherche
 local SearchRow = Instance.new("Frame")
 SearchRow.Size = UDim2.new(1, 0, 0, 30)
 SearchRow.Position = UDim2.new(0, 0, 0, 68)
@@ -304,7 +303,7 @@ local SearchCorner = Instance.new("UICorner")
 SearchCorner.CornerRadius = UDim.new(0, 4)
 SearchCorner.Parent = SearchBox
 
--- ---- Slider & distance ----
+-- Plage de distance
 local MIN_DISTANCE = -50
 local MAX_DISTANCE = 50
 
@@ -378,7 +377,7 @@ UpdateDistance(0)
 -- ScrollView pour la liste
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Size = UDim2.new(0.95, 0, 0.62, 0)
-ScrollFrame.Position = UDim2.new(0.025, 0, 0.28, 0) -- ajusté
+ScrollFrame.Position = UDim2.new(0.025, 0, 0.28, 0)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -391,7 +390,7 @@ PlayerList.Padding = UDim.new(0, 8)
 PlayerList.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerList.Parent = ScrollFrame
 
--- Variables de déplacement
+-- Variables pour le déplacement
 local Dragging = false
 local DragStart = nil
 local StartPos = nil
@@ -453,7 +452,6 @@ local function StartInfiniteTeleport(player)
     InfiniteTeleport.Active = true
     InfiniteTeleport.TargetPlayer = player
 
-    -- Désactiver les collisions sur le joueur cible
     local character = player.Character
     for _, part in ipairs(character:GetDescendants()) do
         if part:IsA("BasePart") then
@@ -528,7 +526,7 @@ local function UpdateAllTeleportButtons()
             if btn then
                 local playerNameLabel = child:FindFirstChild("PlayerName")
                 if playerNameLabel then
-                    -- Extraire le DisplayName du texte (avant le @)
+                    -- Extraire le DisplayName du texte (avant le " (")
                     local displayName = playerNameLabel.Text:match("^(.-) %(") or playerNameLabel.Text
                     -- Trouver le joueur correspondant
                     local target = nil
@@ -726,7 +724,7 @@ local function ToggleMinimize()
         }):Play()
         ContentContainer.Visible = false
         Title.Text = "👥 Joueurs ▼"
-        MinimizeButton.Text = "⊕"
+        MinimizeButton.Text = "+"
     else
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
             Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
@@ -748,7 +746,7 @@ local function ShowMainFrame()
     FloatButton.Visible = false
     if SavedPosition then MainFrame.Position = SavedPosition end
     if IsMinimized then
-        MinimizeButton.Text = "⊕"
+        MinimizeButton.Text = "+"
         Title.Text = "👥 Joueurs ▼"
         ContentContainer.Visible = false
     else
@@ -851,7 +849,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("✅ Player Teleport GUI chargé (avec recherche et affichage DisplayName + @pseudo)")
-print("Bouton - : Réduire | Bouton X : Fermer")
-print("Slider : Distance de téléportation (-50 à +50 studs)")
-print("Recherche : filtre sur DisplayName ou pseudo")
+print("✅ Player Teleport GUI chargé (recherche + DisplayName + @pseudo)")
