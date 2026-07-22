@@ -43,11 +43,19 @@ local function GetAdaptiveSize()
 end
 
 local function GetAdaptiveFontSize()
-    return IsMobile or IsSmallScreen and 14 or 18
+    if IsMobile or IsSmallScreen then
+        return 14
+    else
+        return 18
+    end
 end
 
 local function GetAdaptiveButtonSize()
-    return IsMobile or IsSmallScreen and {60, 28} or {70, 32}
+    if IsMobile or IsSmallScreen then
+        return {60, 28}
+    else
+        return {70, 32}
+    end
 end
 
 -- Fenêtre principale
