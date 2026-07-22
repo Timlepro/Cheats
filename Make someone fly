@@ -50,11 +50,12 @@ local function GetAdaptiveFontSize()
     end
 end
 
+-- Modification : retourne deux nombres directement (plus de table)
 local function GetAdaptiveButtonSize()
     if IsMobile or IsSmallScreen then
-        return {60, 28}
+        return 60, 28
     else
-        return {70, 32}
+        return 70, 32
     end
 end
 
@@ -135,7 +136,7 @@ CloseButton.Position = UDim2.new(1, -40, 0, 5)
 CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 CloseButton.BackgroundTransparency = 0.3
 CloseButton.BorderSizePixel = 0
-CloseButton.Text = "X"
+CloseButton.Text = "✕"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
@@ -605,7 +606,7 @@ local function CreatePlayerItem(player, index)
     -- Bouton téléporter
     local TeleportButton = Instance.new("TextButton")
     TeleportButton.Name = "TeleportButton"
-    local btnW, btnH = table.unpack(GetAdaptiveButtonSize())
+    local btnW, btnH = GetAdaptiveButtonSize()  -- Plus de table.unpack
     TeleportButton.Size = UDim2.new(0, btnW, 0, btnH)
     TeleportButton.Position = UDim2.new(0.65, 0, 0.5, -btnH/2)
     TeleportButton.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
@@ -732,7 +733,7 @@ local function ToggleMinimize()
         }):Play()
         ContentContainer.Visible = false
         Title.Text = "👥 Joueurs ▼"
-        MinimizeButton.Text = "+"
+        MinimizeButton.Text = "⊕"  -- Symbole pour agrandir
     else
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
             Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
@@ -740,7 +741,7 @@ local function ToggleMinimize()
         task.wait(0.3)
         ContentContainer.Visible = true
         Title.Text = "👥 Joueurs Connectés"
-        MinimizeButton.Text = "−"
+        MinimizeButton.Text = "−"  -- Symbole pour réduire
     end
 end
 
@@ -753,8 +754,9 @@ local function ShowMainFrame()
     MainFrame.Visible = true
     FloatButton.Visible = false
     if SavedPosition then MainFrame.Position = SavedPosition end
+    -- Restaurer l'état correct
     if IsMinimized then
-        MinimizeButton.Text = "+"
+        MinimizeButton.Text = "⊕"
         Title.Text = "👥 Joueurs ▼"
         ContentContainer.Visible = false
     else
@@ -842,7 +844,7 @@ RunService.RenderStepped:Connect(function()
             if item:IsA("Frame") and item.Name:match("PlayerItem_") then
                 for _, child in pairs(item:GetChildren()) do
                     if child:IsA("TextButton") and child.Name == "TeleportButton" then
-                        local btnW, btnH = table.unpack(GetAdaptiveButtonSize())
+                        local btnW, btnH = GetAdaptiveButtonSize()
                         child.Size = UDim2.new(0, btnW, 0, btnH)
                         child.Position = UDim2.new(0.65, 0, 0.5, -btnH/2)
                         child.TextSize = GetAdaptiveFontSize() - 5
