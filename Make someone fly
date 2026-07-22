@@ -1,16 +1,15 @@
 -- Script UI Mobile/PC - Popup déplaçable avec téléportation infinie
--- Version avec slider de distance, saisie manuelle, recherche de joueurs
+-- Version avec slider, saisie manuelle, recherche, avatar, TextScaled, tout en pourcentages
 -- À mettre dans un LocalScript dans StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
--- Variables pour la téléportation infinie
+-- Variables téléportation
 local InfiniteTeleport = {
     Active = false,
     TargetPlayer = nil,
@@ -25,38 +24,20 @@ ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Variables pour l'adaptation mobile
+-- Variables d'adaptation
 local IsMobile = UserInputService.TouchEnabled
 local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
 
--- Dimensions adaptatives
+-- Fonctions de dimensions (tout en pourcentages)
 local function GetAdaptiveSize()
     local screenSize = workspace.CurrentCamera.ViewportSize
-    local width = math.min(420, screenSize.X * 0.9)
-    local height = math.min(620, screenSize.Y * 0.9)
-
+    local width = math.min(0.9, 0.9) * screenSize.X  -- 90% de l'écran
+    local height = math.min(0.9, 0.9) * screenSize.Y
     if IsMobile or IsSmallScreen then
-        width = math.min(360, screenSize.X * 0.92)
-        height = math.min(560, screenSize.Y * 0.85)
+        width = math.min(0.92, 0.92) * screenSize.X
+        height = math.min(0.85, 0.85) * screenSize.Y
     end
     return width, height
-end
-
-local function GetAdaptiveFontSize()
-    if IsMobile or IsSmallScreen then
-        return 14
-    else
-        return 18
-    end
-end
-
--- Modification : retourne deux nombres directement (plus de table)
-local function GetAdaptiveButtonSize()
-    if IsMobile or IsSmallScreen then
-        return 60, 28
-    else
-        return 70, 32
-    end
 end
 
 -- Fenêtre principale
@@ -70,14 +51,14 @@ MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 MainFrame.Visible = true
 
-local function UpdateMainFrameSize()
-    local width, height = GetAdaptiveSize()
-    MainFrame.Size = UDim2.new(0, width, 0, height)
-    MainFrame.Position = UDim2.new(0.5, -width/2, 0.5, -height/2)
+local function UpdateMainFrame()
+    local w, h = GetAdaptiveSize()
+    MainFrame.Size = UDim2.new(0, w, 0, h)
+    MainFrame.Position = UDim2.new(0.5, -w/2, 0.5, -h/2)
 end
-UpdateMainFrameSize()
+UpdateMainFrame()
 
--- Fond glass
+-- Glass effect
 local GlassEffect = Instance.new("Frame")
 GlassEffect.Size = UDim2.new(1, 0, 1, 0)
 GlassEffect.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
@@ -107,12 +88,12 @@ Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "👥 Joueurs Connectés"
 Title.TextColor3 = Color3.fromRGB(220, 220, 230)
-Title.TextSize = GetAdaptiveFontSize()
+Title.TextSize = 18
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
 
--- Bouton réduire
+-- Bouton réduire ( - ) à gauche du X
 local MinimizeButton = Instance.new("TextButton")
 MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
 MinimizeButton.Position = UDim2.new(1, -75, 0, 5)
@@ -129,14 +110,14 @@ local MinCorner = Instance.new("UICorner")
 MinCorner.CornerRadius = UDim.new(0, 5)
 MinCorner.Parent = MinimizeButton
 
--- Bouton fermer
+-- Bouton fermer (X)
 local CloseButton = Instance.new("TextButton")
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
 CloseButton.Position = UDim2.new(1, -40, 0, 5)
 CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 CloseButton.BackgroundTransparency = 0.3
 CloseButton.BorderSizePixel = 0
-CloseButton.Text = "✕"
+CloseButton.Text = "X"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
@@ -173,17 +154,17 @@ MinimizeButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- Conteneur principal
+-- Conteneur principal (sous la barre de titre)
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Size = UDim2.new(1, 0, 1, -40)
 ContentContainer.Position = UDim2.new(0, 0, 0, 40)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.Parent = MainFrame
 
--- Panneau de contrôle (distance + recherche)
+-- ===== Panneau de contrôle (distance + recherche) =====
 local ControlPanel = Instance.new("Frame")
-ControlPanel.Size = UDim2.new(0.95, 0, 0, 110)
-ControlPanel.Position = UDim2.new(0.025, 0, 0, 0)
+ControlPanel.Size = UDim2.new(1, 0, 0.3, 0)    -- 30% de la hauteur
+ControlPanel.Position = UDim2.new(0, 0, 0, 0)
 ControlPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 ControlPanel.BackgroundTransparency = 0.3
 ControlPanel.BorderSizePixel = 1
@@ -194,34 +175,34 @@ local ControlCorner = Instance.new("UICorner")
 ControlCorner.CornerRadius = UDim.new(0, 6)
 ControlCorner.Parent = ControlPanel
 
--- Ligne distance
+-- 1ère ligne : Distance (label + TextBox)
 local DistanceRow = Instance.new("Frame")
-DistanceRow.Size = UDim2.new(1, 0, 0, 30)
+DistanceRow.Size = UDim2.new(1, 0, 0.33, 0)
 DistanceRow.Position = UDim2.new(0, 0, 0, 0)
 DistanceRow.BackgroundTransparency = 1
 DistanceRow.Parent = ControlPanel
 
 local DistanceLabel = Instance.new("TextLabel")
-DistanceLabel.Size = UDim2.new(0.4, 0, 1, 0)
+DistanceLabel.Size = UDim2.new(0.45, 0, 1, 0)
 DistanceLabel.Position = UDim2.new(0.02, 0, 0, 0)
 DistanceLabel.BackgroundTransparency = 1
 DistanceLabel.Text = "📏 Distance :"
 DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-DistanceLabel.TextSize = GetAdaptiveFontSize() - 2
+DistanceLabel.TextSize = 14
 DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
 DistanceLabel.Font = Enum.Font.GothamMedium
 DistanceLabel.Parent = DistanceRow
 
 local DistanceBox = Instance.new("TextBox")
-DistanceBox.Size = UDim2.new(0.2, 0, 0.8, 0)
-DistanceBox.Position = UDim2.new(0.43, 0, 0.1, 0)
+DistanceBox.Size = UDim2.new(0.2, 0, 0.7, 0)
+DistanceBox.Position = UDim2.new(0.48, 0, 0.15, 0)
 DistanceBox.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
 DistanceBox.BackgroundTransparency = 0.3
 DistanceBox.BorderSizePixel = 1
 DistanceBox.BorderColor3 = Color3.fromRGB(70, 70, 90)
 DistanceBox.Text = "0"
 DistanceBox.TextColor3 = Color3.fromRGB(220, 220, 240)
-DistanceBox.TextSize = GetAdaptiveFontSize() - 2
+DistanceBox.TextSize = 14
 DistanceBox.TextXAlignment = Enum.TextXAlignment.Center
 DistanceBox.Font = Enum.Font.GothamMedium
 DistanceBox.ClearTextOnFocus = false
@@ -231,16 +212,16 @@ local BoxCorner = Instance.new("UICorner")
 BoxCorner.CornerRadius = UDim.new(0, 4)
 BoxCorner.Parent = DistanceBox
 
--- Ligne slider
+-- 2ème ligne : Slider
 local SliderRow = Instance.new("Frame")
-SliderRow.Size = UDim2.new(1, 0, 0, 30)
-SliderRow.Position = UDim2.new(0, 0, 0, 32)
+SliderRow.Size = UDim2.new(1, 0, 0.33, 0)
+SliderRow.Position = UDim2.new(0, 0, 0.33, 0)
 SliderRow.BackgroundTransparency = 1
 SliderRow.Parent = ControlPanel
 
 local SliderTrack = Instance.new("Frame")
-SliderTrack.Size = UDim2.new(0.7, 0, 0, 6)
-SliderTrack.Position = UDim2.new(0.15, 0, 0.5, -3)
+SliderTrack.Size = UDim2.new(0.7, 0, 0.2, 0)
+SliderTrack.Position = UDim2.new(0.15, 0, 0.4, 0)
 SliderTrack.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 SliderTrack.BackgroundTransparency = 0.5
 SliderTrack.BorderSizePixel = 0
@@ -274,10 +255,10 @@ local SliderCorner = Instance.new("UICorner")
 SliderCorner.CornerRadius = UDim.new(1, 0)
 SliderCorner.Parent = SliderButton
 
--- Ligne recherche
+-- 3ème ligne : Recherche
 local SearchRow = Instance.new("Frame")
-SearchRow.Size = UDim2.new(1, 0, 0, 30)
-SearchRow.Position = UDim2.new(0, 0, 0, 68)
+SearchRow.Size = UDim2.new(1, 0, 0.33, 0)
+SearchRow.Position = UDim2.new(0, 0, 0.67, 0)
 SearchRow.BackgroundTransparency = 1
 SearchRow.Parent = ControlPanel
 
@@ -287,14 +268,14 @@ SearchIcon.Position = UDim2.new(0.02, 0, 0, 0)
 SearchIcon.BackgroundTransparency = 1
 SearchIcon.Text = "🔍"
 SearchIcon.TextColor3 = Color3.fromRGB(200, 200, 220)
-SearchIcon.TextSize = GetAdaptiveFontSize() - 2
+SearchIcon.TextSize = 14
 SearchIcon.TextXAlignment = Enum.TextXAlignment.Center
 SearchIcon.Font = Enum.Font.GothamMedium
 SearchIcon.Parent = SearchRow
 
 local SearchBox = Instance.new("TextBox")
-SearchBox.Size = UDim2.new(0.86, 0, 0.8, 0)
-SearchBox.Position = UDim2.new(0.10, 0, 0.1, 0)
+SearchBox.Size = UDim2.new(0.86, 0, 0.7, 0)
+SearchBox.Position = UDim2.new(0.10, 0, 0.15, 0)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
 SearchBox.BackgroundTransparency = 0.3
 SearchBox.BorderSizePixel = 1
@@ -302,7 +283,7 @@ SearchBox.BorderColor3 = Color3.fromRGB(70, 70, 90)
 SearchBox.Text = ""
 SearchBox.PlaceholderText = "Rechercher un joueur..."
 SearchBox.TextColor3 = Color3.fromRGB(220, 220, 240)
-SearchBox.TextSize = GetAdaptiveFontSize() - 2
+SearchBox.TextSize = 14
 SearchBox.TextXAlignment = Enum.TextXAlignment.Left
 SearchBox.Font = Enum.Font.GothamMedium
 SearchBox.ClearTextOnFocus = true
@@ -312,81 +293,10 @@ local SearchCorner = Instance.new("UICorner")
 SearchCorner.CornerRadius = UDim.new(0, 4)
 SearchCorner.Parent = SearchBox
 
--- Plage de distance
-local MIN_DISTANCE = -50
-local MAX_DISTANCE = 50
-
-local function UpdateDistanceDisplay(value)
-    if value >= 0 then
-        DistanceLabel.Text = "📏 Distance : " .. string.format("%.1f", value) .. " sous les pieds"
-    else
-        DistanceLabel.Text = "📏 Distance : " .. string.format("%.1f", math.abs(value)) .. " au-dessus des pieds"
-    end
-    DistanceBox.Text = string.format("%.1f", value)
-end
-
-local function UpdateDistance(value)
-    local normalized = math.clamp((value - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE), 0, 1)
-    SliderFill.Size = UDim2.new(normalized, 0, 1, 0)
-    SliderButton.Position = UDim2.new(normalized, -9, 0.5, -9)
-    InfiniteTeleport.Distance = value
-    UpdateDistanceDisplay(value)
-end
-
--- Gestion du slider
-local isDraggingSlider = false
-
-local function StartSliderDrag(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        isDraggingSlider = true
-        UpdateSliderPosition(input)
-    end
-end
-
-local function UpdateSliderPosition(input)
-    if not isDraggingSlider then return end
-    local trackPos = SliderTrack.AbsolutePosition
-    local trackSize = SliderTrack.AbsoluteSize
-    local mouseX = input.Position.X
-    local normalized = math.clamp((mouseX - trackPos.X) / trackSize.X, 0, 1)
-    local value = MIN_DISTANCE + normalized * (MAX_DISTANCE - MIN_DISTANCE)
-    UpdateDistance(value)
-end
-
-local function EndSliderDrag()
-    isDraggingSlider = false
-end
-
-SliderButton.InputBegan:Connect(StartSliderDrag)
-SliderButton.InputChanged:Connect(UpdateSliderPosition)
-SliderButton.InputEnded:Connect(EndSliderDrag)
-
-SliderTrack.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        isDraggingSlider = true
-        UpdateSliderPosition(input)
-    end
-end)
-SliderTrack.InputChanged:Connect(UpdateSliderPosition)
-SliderTrack.InputEnded:Connect(EndSliderDrag)
-
--- Saisie manuelle
-DistanceBox.FocusLost:Connect(function(enterPressed)
-    local val = tonumber(DistanceBox.Text)
-    if val then
-        val = math.clamp(val, MIN_DISTANCE, MAX_DISTANCE)
-        UpdateDistance(val)
-    else
-        DistanceBox.Text = string.format("%.1f", InfiniteTeleport.Distance)
-    end
-end)
-
-UpdateDistance(0)
-
--- ScrollView pour la liste
+-- ===== Liste des joueurs =====
 local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Size = UDim2.new(0.95, 0, 0.62, 0)
-ScrollFrame.Position = UDim2.new(0.025, 0, 0.28, 0)
+ScrollFrame.Size = UDim2.new(1, 0, 0.7, 0)      -- 70% restants
+ScrollFrame.Position = UDim2.new(0, 0, 0.3, 0)  -- juste en dessous du panneau
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -399,18 +309,18 @@ PlayerList.Padding = UDim.new(0, 8)
 PlayerList.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerList.Parent = ScrollFrame
 
--- Variables pour le déplacement
+-- ===== Variables pour le déplacement =====
 local Dragging = false
 local DragStart = nil
 local StartPos = nil
 
--- Variables pour le mode réduit
+-- ===== Mode réduit =====
 local IsMinimized = false
 local MinimizedSize = 40
 local FullSize = {Width = 0, Height = 0}
 local SavedPosition = nil
 
--- Bouton flottant
+-- ===== Bouton flottant =====
 local FloatButton = Instance.new("ImageButton")
 FloatButton.Size = UDim2.new(0, 50, 0, 50)
 FloatButton.Position = UDim2.new(0.5, -25, 0.02, 0)
@@ -450,7 +360,76 @@ FloatButton.MouseLeave:Connect(function()
     }):Play()
 end)
 
--- Fonctions de téléportation
+-- ===== Gestion du slider =====
+local MIN_DISTANCE = -50
+local MAX_DISTANCE = 50
+
+local function UpdateDistanceDisplay(value)
+    if value >= 0 then
+        DistanceLabel.Text = "📏 Distance : " .. string.format("%.1f", value) .. " sous les pieds"
+    else
+        DistanceLabel.Text = "📏 Distance : " .. string.format("%.1f", math.abs(value)) .. " au-dessus des pieds"
+    end
+    DistanceBox.Text = string.format("%.1f", value)
+end
+
+local function UpdateDistance(value)
+    local normalized = math.clamp((value - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE), 0, 1)
+    SliderFill.Size = UDim2.new(normalized, 0, 1, 0)
+    SliderButton.Position = UDim2.new(normalized, -9, 0.5, -9)
+    InfiniteTeleport.Distance = value
+    UpdateDistanceDisplay(value)
+end
+
+local isDraggingSlider = false
+
+local function StartSliderDrag(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDraggingSlider = true
+        UpdateSliderPosition(input)
+    end
+end
+
+local function UpdateSliderPosition(input)
+    if not isDraggingSlider then return end
+    local trackPos = SliderTrack.AbsolutePosition
+    local trackSize = SliderTrack.AbsoluteSize
+    local mouseX = input.Position.X
+    local normalized = math.clamp((mouseX - trackPos.X) / trackSize.X, 0, 1)
+    local value = MIN_DISTANCE + normalized * (MAX_DISTANCE - MIN_DISTANCE)
+    UpdateDistance(value)
+end
+
+local function EndSliderDrag()
+    isDraggingSlider = false
+end
+
+SliderButton.InputBegan:Connect(StartSliderDrag)
+SliderButton.InputChanged:Connect(UpdateSliderPosition)
+SliderButton.InputEnded:Connect(EndSliderDrag)
+
+SliderTrack.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDraggingSlider = true
+        UpdateSliderPosition(input)
+    end
+end)
+SliderTrack.InputChanged:Connect(UpdateSliderPosition)
+SliderTrack.InputEnded:Connect(EndSliderDrag)
+
+DistanceBox.FocusLost:Connect(function()
+    local val = tonumber(DistanceBox.Text)
+    if val then
+        val = math.clamp(val, MIN_DISTANCE, MAX_DISTANCE)
+        UpdateDistance(val)
+    else
+        DistanceBox.Text = string.format("%.1f", InfiniteTeleport.Distance)
+    end
+end)
+
+UpdateDistance(0)
+
+-- ===== Fonctions de téléportation =====
 local function StartInfiniteTeleport(player)
     if InfiniteTeleport.Active then StopInfiniteTeleport() end
     if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
@@ -527,7 +506,6 @@ local function StopInfiniteTeleport()
     UpdateAllTeleportButtons()
 end
 
--- Mettre à jour tous les boutons
 local function UpdateAllTeleportButtons()
     for _, child in ipairs(ScrollFrame:GetChildren()) do
         if child:IsA("Frame") and child.Name:match("PlayerItem_") then
@@ -535,9 +513,7 @@ local function UpdateAllTeleportButtons()
             if btn then
                 local playerNameLabel = child:FindFirstChild("PlayerName")
                 if playerNameLabel then
-                    -- Extraire le DisplayName du texte (avant le " (")
                     local displayName = playerNameLabel.Text:match("^(.-) %(") or playerNameLabel.Text
-                    -- Trouver le joueur correspondant
                     local target = nil
                     for _, p in ipairs(Players:GetPlayers()) do
                         if p.DisplayName == displayName or p.Name == displayName then
@@ -562,11 +538,11 @@ local function UpdateAllTeleportButtons()
     end
 end
 
--- Création d'un item joueur
+-- ===== Création d'un élément joueur =====
 local function CreatePlayerItem(player, index)
     local ItemFrame = Instance.new("Frame")
     ItemFrame.Name = "PlayerItem_" .. index
-    ItemFrame.Size = UDim2.new(1, -10, 0, 45)
+    ItemFrame.Size = UDim2.new(1, -0.02, 0, 45)   -- largeur 98%, hauteur fixe 45
     ItemFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     ItemFrame.BackgroundTransparency = 0.3
     ItemFrame.BorderSizePixel = 1
@@ -577,44 +553,38 @@ local function CreatePlayerItem(player, index)
     ItemCorner.CornerRadius = UDim.new(0, 6)
     ItemCorner.Parent = ItemFrame
 
-    -- Affichage du DisplayName et du Name entre parenthèses
+    -- Avatar (icône)
+    local AvatarImage = Instance.new("ImageLabel")
+    AvatarImage.Size = UDim2.new(0, 30, 0, 30)
+    AvatarImage.Position = UDim2.new(0.02, 0, 0.5, -15)
+    AvatarImage.BackgroundTransparency = 1
+    AvatarImage.Image = "rbxassetid://" .. tostring(player.UserId) .. "/Avatar"  -- ou utiliser un service
+    AvatarImage.Parent = ItemFrame
+
+    -- Pseudo (DisplayName + @Name) avec TextScaled
     local PlayerName = Instance.new("TextLabel")
     PlayerName.Name = "PlayerName"
-    PlayerName.Size = UDim2.new(0.5, 0, 1, 0)
-    PlayerName.Position = UDim2.new(0.05, 0, 0, 0)
+    PlayerName.Size = UDim2.new(0.45, 0, 1, 0)
+    PlayerName.Position = UDim2.new(0.12, 0, 0, 0)
     PlayerName.BackgroundTransparency = 1
     PlayerName.Text = player.DisplayName .. " (@" .. player.Name .. ")"
     PlayerName.TextColor3 = Color3.fromRGB(200, 200, 220)
-    PlayerName.TextSize = GetAdaptiveFontSize() - 2
+    PlayerName.TextScaled = true
     PlayerName.TextXAlignment = Enum.TextXAlignment.Left
     PlayerName.Font = Enum.Font.GothamMedium
     PlayerName.Parent = ItemFrame
 
-    -- Indicateur de statut
-    local StatusIndicator = Instance.new("Frame")
-    StatusIndicator.Size = UDim2.new(0, 8, 0, 8)
-    StatusIndicator.Position = UDim2.new(0.45, 0, 0.5, -4)
-    StatusIndicator.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-    StatusIndicator.BackgroundTransparency = 0.3
-    StatusIndicator.BorderSizePixel = 0
-    StatusIndicator.Parent = ItemFrame
-
-    local StatusCorner = Instance.new("UICorner")
-    StatusCorner.CornerRadius = UDim.new(1, 0)
-    StatusCorner.Parent = StatusIndicator
-
-    -- Bouton téléporter
+    -- Bouton Téléporter (tout à droite)
     local TeleportButton = Instance.new("TextButton")
     TeleportButton.Name = "TeleportButton"
-    local btnW, btnH = GetAdaptiveButtonSize()  -- Plus de table.unpack
-    TeleportButton.Size = UDim2.new(0, btnW, 0, btnH)
-    TeleportButton.Position = UDim2.new(0.65, 0, 0.5, -btnH/2)
+    TeleportButton.Size = UDim2.new(0.2, 0, 0.7, 0)  -- 20% de la largeur, 70% de la hauteur
+    TeleportButton.Position = UDim2.new(0.78, 0, 0.15, 0)
     TeleportButton.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
     TeleportButton.BackgroundTransparency = 0.2
     TeleportButton.BorderSizePixel = 0
     TeleportButton.Text = "🔗 Téléporter"
     TeleportButton.TextColor3 = Color3.fromRGB(180, 220, 255)
-    TeleportButton.TextSize = GetAdaptiveFontSize() - 5
+    TeleportButton.TextSize = 12
     TeleportButton.Font = Enum.Font.GothamBold
     TeleportButton.Parent = ItemFrame
     TeleportButton.AutoButtonColor = false
@@ -640,12 +610,13 @@ local function CreatePlayerItem(player, index)
 
     TeleportButton.MouseButton1Click:Connect(function()
         pcall(function()
+            -- Animation clic
             TweenService:Create(TeleportButton, TweenInfo.new(0.1), {
-                Size = UDim2.new(0, btnW-5, 0, btnH-3)
+                Size = UDim2.new(0.18, 0, 0.65, 0)
             }):Play()
             task.wait(0.1)
             TweenService:Create(TeleportButton, TweenInfo.new(0.1), {
-                Size = UDim2.new(0, btnW, 0, btnH)
+                Size = UDim2.new(0.2, 0, 0.7, 0)
             }):Play()
 
             if InfiniteTeleport.Active and InfiniteTeleport.TargetPlayer == player then
@@ -659,9 +630,8 @@ local function CreatePlayerItem(player, index)
     return ItemFrame
 end
 
--- Rafraîchir la liste avec filtre
+-- ===== Rafraîchir la liste avec filtre =====
 local function RefreshPlayerList(filterText)
-    -- Supprimer les anciens items
     for _, child in ipairs(ScrollFrame:GetChildren()) do
         if child:IsA("Frame") and child.Name:match("PlayerItem_") then
             child:Destroy()
@@ -675,7 +645,6 @@ local function RefreshPlayerList(filterText)
         end
     end
 
-    -- Appliquer le filtre
     if filterText and filterText ~= "" then
         local lowerFilter = filterText:lower()
         local filtered = {}
@@ -696,8 +665,6 @@ local function RefreshPlayerList(filterText)
     end
 
     ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#playerList * 53) + 10)
-
-    -- Mettre à jour les états des boutons
     UpdateAllTeleportButtons()
 end
 
@@ -706,10 +673,8 @@ SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     RefreshPlayerList(SearchBox.Text)
 end)
 
--- Mise à jour initiale
 RefreshPlayerList("")
 
--- Mettre à jour la liste quand des joueurs rejoignent/quittent
 Players.PlayerAdded:Connect(function()
     RefreshPlayerList(SearchBox.Text)
 end)
@@ -721,7 +686,7 @@ Players.PlayerRemoving:Connect(function(player)
     RefreshPlayerList(SearchBox.Text)
 end)
 
--- Fonctions de réduction / fermeture
+-- ===== Gestion du mode réduit =====
 local function ToggleMinimize()
     IsMinimized = not IsMinimized
     if IsMinimized then
@@ -733,7 +698,7 @@ local function ToggleMinimize()
         }):Play()
         ContentContainer.Visible = false
         Title.Text = "👥 Joueurs ▼"
-        MinimizeButton.Text = "⊕"  -- Symbole pour agrandir
+        MinimizeButton.Text = "+"   -- '+' pour agrandir
     else
         TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
             Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
@@ -741,22 +706,23 @@ local function ToggleMinimize()
         task.wait(0.3)
         ContentContainer.Visible = true
         Title.Text = "👥 Joueurs Connectés"
-        MinimizeButton.Text = "−"  -- Symbole pour réduire
+        MinimizeButton.Text = "−"   -- '-' pour réduire
     end
 end
 
+-- ===== Fermeture =====
 local function DestroyGUI()
     if InfiniteTeleport.Active then StopInfiniteTeleport() end
     ScreenGui:Destroy()
 end
 
+-- ===== Afficher / cacher =====
 local function ShowMainFrame()
     MainFrame.Visible = true
     FloatButton.Visible = false
     if SavedPosition then MainFrame.Position = SavedPosition end
-    -- Restaurer l'état correct
     if IsMinimized then
-        MinimizeButton.Text = "⊕"
+        MinimizeButton.Text = "+"
         Title.Text = "👥 Joueurs ▼"
         ContentContainer.Visible = false
     else
@@ -778,7 +744,7 @@ local function HideMainFrame()
     }):Play()
 end
 
--- Déplacement de la fenêtre
+-- ===== Déplacement de la fenêtre =====
 local function StartDrag(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         Dragging = true
@@ -813,6 +779,7 @@ ShowMainFrame()
 
 _G.ShowTeleportGUI = ShowMainFrame
 
+-- ===== Réattacher si la GUI est détruite =====
 ScreenGui.AncestryChanged:Connect(function()
     if not ScreenGui.Parent then
         task.wait(1)
@@ -822,7 +789,7 @@ ScreenGui.AncestryChanged:Connect(function()
     end
 end)
 
--- Adaptation au redimensionnement
+-- ===== Redimensionnement adaptatif =====
 RunService.RenderStepped:Connect(function()
     local currentSize = workspace.CurrentCamera.ViewportSize
     local isNowSmall = currentSize.X < 600
@@ -832,31 +799,10 @@ RunService.RenderStepped:Connect(function()
         if FloatButton.Visible then
             FloatButton.Position = UDim2.new(0.5, -25, 0.02, 0)
         end
-        UpdateMainFrameSize()
-        local newFontSize = GetAdaptiveFontSize()
-        Title.TextSize = newFontSize
-        DistanceLabel.TextSize = newFontSize - 2
-        DistanceBox.TextSize = newFontSize - 2
-        SearchBox.TextSize = newFontSize - 2
-        SearchIcon.TextSize = newFontSize - 2
-
-        for _, item in pairs(ScrollFrame:GetChildren()) do
-            if item:IsA("Frame") and item.Name:match("PlayerItem_") then
-                for _, child in pairs(item:GetChildren()) do
-                    if child:IsA("TextButton") and child.Name == "TeleportButton" then
-                        local btnW, btnH = GetAdaptiveButtonSize()
-                        child.Size = UDim2.new(0, btnW, 0, btnH)
-                        child.Position = UDim2.new(0.65, 0, 0.5, -btnH/2)
-                        child.TextSize = GetAdaptiveFontSize() - 5
-                    elseif child:IsA("TextLabel") and child.Name == "PlayerName" then
-                        child.TextSize = GetAdaptiveFontSize() - 2
-                    end
-                end
-            end
-        end
-        -- Rafraîchir la liste pour les nouveaux textes
+        UpdateMainFrame()
+        -- Rafraîchir pour mettre à jour les textes
         RefreshPlayerList(SearchBox.Text)
     end
 end)
 
-print("✅ Player Teleport GUI chargé (recherche + DisplayName + @pseudo)")
+print("✅ Player Teleport GUI chargé – version tout en pourcentages, avec avatar, TextScaled, et corrections.")
