@@ -530,7 +530,7 @@ local function UpdateAllTeleportButtons()
                             btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
                             btn.TextColor3 = Color3.fromRGB(255, 200, 200)
                         else
-                            btn.Text = "🔗 Télép."
+                            btn.Text = "🔗 Téléporter"
                             btn.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
                             btn.TextColor3 = Color3.fromRGB(180, 220, 255)
                         end
