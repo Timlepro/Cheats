@@ -36,6 +36,12 @@ local Scripts = {
         requirePlaceId = true,
         PlaceIds = {13822889}
     },
+    {
+        Name = "SPeed20==",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/speed%20roblox%202000",
+        requirePlaceId = flase,
+        PlaceIds = {}
+    },
 }
 
 -- ===== GESTION DES PRÉFÉRENCES =====
