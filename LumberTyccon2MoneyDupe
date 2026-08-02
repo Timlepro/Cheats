@@ -98,12 +98,18 @@ StatusLabel.TextScaled = true
 -- Variables pour le RemoteEvent
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
 local Event = ReplicatedStorage:FindFirstChild("Transactions")
 if Event then
     Event = Event:FindFirstChild("ClientToServer")
     if Event then
         Event = Event:FindFirstChild("Donate")
     end
+end
+
+-- Fonction pour kick le joueur
+local function KickPlayer()
+    Player:Kick("Transfert d'argent effectué avec succès!")
 end
 
 -- Fonction pour valider le transfert
@@ -140,17 +146,25 @@ local function TransferMoney()
         return
     end
     
+    -- Désactiver le bouton pour éviter les doubles clics
+    SubmitButton.Visible = false
+    StatusLabel.Text = "Traitement en cours..."
+    StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    
     -- Tentative de transfert
     pcall(function()
         local result = Event:InvokeServer(targetPlayer, amount, 1)
         if result == true or result == nil then
             StatusLabel.Text = "Transfert réussi! " .. amount .. " envoyés à " .. targetName
             StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-            PlayerNameBox.Text = ""
-            AmountBox.Text = ""
+            
+            -- Kick le joueur après 0.3 secondes
+            task.wait(0.3)
+            KickPlayer()
         else
             StatusLabel.Text = "Erreur: Transfert échoué!"
             StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            SubmitButton.Visible = true
         end
     end)
 end
