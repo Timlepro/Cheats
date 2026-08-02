@@ -37,6 +37,12 @@ local Scripts = {
         PlaceIds = {13822889}
     },
     {
+        Name = "LumberTyccon2MoneyDupe",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/LumberTyccon2MoneyDupe",
+        requirePlaceId = flase,
+        PlaceIds = {}
+    },
+    {
         Name = "Roblox Speed",
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Roblox%20Speed",
         requirePlaceId = flase,
