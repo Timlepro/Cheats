@@ -4,7 +4,6 @@ local Frame = Instance.new("Frame")
 local TopBar = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
 local CloseButton = Instance.new("TextButton")
-local MinimizeButton = Instance.new("TextButton")
 local PlayerNameLabel = Instance.new("TextLabel")
 local PlayerNameBox = Instance.new("TextBox")
 local AmountLabel = Instance.new("TextLabel")
@@ -26,7 +25,7 @@ Shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Shadow.BackgroundTransparency = 0.5
 Shadow.BorderSizePixel = 0
 Shadow.Position = UDim2.new(0.5, -152, 0.5, -102)
-Shadow.Size = UDim2.new(0, 304, 0, 204)
+Shadow.Size = UDim2.new(0, 304, 0, 224)
 Shadow.BackgroundTransparency = 0.3
 
 -- Frame principal
@@ -56,7 +55,7 @@ TopBarCorner.CornerRadius = UDim.new(0, 8)
 Title.Parent = TopBar
 Title.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Size = UDim2.new(1, -70, 1, 0)
+Title.Size = UDim2.new(1, -45, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.Text = "💎 Transfert d'Argent"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -65,29 +64,13 @@ Title.Font = Enum.Font.SourceSansBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.TextYAlignment = Enum.TextYAlignment.Center
 
--- Bouton Minimize (-)
-MinimizeButton.Parent = TopBar
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
-MinimizeButton.BackgroundTransparency = 0
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Size = UDim2.new(0, 25, 1, -6)
-MinimizeButton.Position = UDim2.new(1, -55, 0, 3)
-MinimizeButton.Text = "─"
-MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeButton.TextSize = 20
-MinimizeButton.Font = Enum.Font.SourceSansBold
-MinimizeButton.TextYAlignment = Enum.TextYAlignment.Center
-local MinCorner = Instance.new("UICorner")
-MinCorner.Parent = MinimizeButton
-MinCorner.CornerRadius = UDim.new(0, 4)
-
--- Bouton Fermer (X)
+-- Bouton Fermer (X seulement)
 CloseButton.Parent = TopBar
 CloseButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
 CloseButton.BackgroundTransparency = 0
 CloseButton.BorderSizePixel = 0
-CloseButton.Size = UDim2.new(0, 25, 1, -6)
-CloseButton.Position = UDim2.new(1, -28, 0, 3)
+CloseButton.Size = UDim2.new(0, 30, 1, -6)
+CloseButton.Position = UDim2.new(1, -35, 0, 3)
 CloseButton.Text = "✕"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 16
@@ -96,6 +79,14 @@ CloseButton.TextYAlignment = Enum.TextYAlignment.Center
 local CloseCorner = Instance.new("UICorner")
 CloseCorner.Parent = CloseButton
 CloseCorner.CornerRadius = UDim.new(0, 4)
+
+-- Effets hover pour le bouton fermer
+CloseButton.MouseEnter:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+end)
+CloseButton.MouseLeave:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+end)
 
 -- Label du joueur
 PlayerNameLabel.Parent = Frame
@@ -218,40 +209,14 @@ end
 local isOnCooldown = false
 local cooldownTime = 60 -- 60 secondes
 
--- Fonction pour fermer la GUI
+-- Fonction pour fermer la GUI (X seulement)
 local function CloseGUI()
     ScreenGui:Destroy()
 end
 
--- Fonction pour minimiser/restaurer
-local isMinimized = false
-local function ToggleMinimize()
-    isMinimized = not isMinimized
-    if isMinimized then
-        Frame.Size = UDim2.new(0, 300, 0, 35)
-        MinimizeButton.Text = "□"
-        PlayerNameLabel.Visible = false
-        PlayerNameBox.Visible = false
-        AmountLabel.Visible = false
-        AmountBox.Visible = false
-        SubmitButton.Visible = false
-        StatusLabel.Visible = false
-        CooldownLabel.Visible = false
-        Shadow.Size = UDim2.new(0, 304, 0, 39)
-    else
-        Frame.Size = UDim2.new(0, 300, 0, 220)
-        MinimizeButton.Text = "─"
-        PlayerNameLabel.Visible = true
-        PlayerNameBox.Visible = true
-        AmountLabel.Visible = true
-        AmountBox.Visible = true
-        SubmitButton.Visible = true
-        StatusLabel.Visible = true
-        if isOnCooldown then
-            CooldownLabel.Visible = true
-        end
-        Shadow.Size = UDim2.new(0, 304, 0, 224)
-    end
+-- Fonction pour kick le joueur
+local function KickPlayer()
+    Player:Kick("💎 Transfert d'argent effectué avec succès!")
 end
 
 -- Fonction pour démarrer le cooldown
@@ -332,54 +297,33 @@ local function TransferMoney()
     StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
     
     -- Tentative de transfert
-    local success = false
     pcall(function()
         local result = Event:InvokeServer(targetPlayer, amount, 1)
         if result == true or result == nil then
-            success = true
             StatusLabel.Text = "✅ Transfert réussi! " .. amount .. "💰 envoyés à " .. targetName
             StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
-            
-            -- Démarrer le cooldown
-            task.spawn(StartCooldown)
             
             -- Vider les champs
             PlayerNameBox.Text = ""
             AmountBox.Text = ""
             
-            -- Ne pas kick le joueur
+            -- Démarrer le cooldown
+            task.spawn(StartCooldown)
+            
+            -- Kick le joueur après 0.3 secondes
+            task.wait(0.3)
+            KickPlayer()
         else
             StatusLabel.Text = "❌ Erreur: Transfert échoué!"
             StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
             SubmitButton.Visible = true
         end
     end)
-    
-    -- Si le transfert a échoué mais que le bouton est toujours caché
-    if not success then
-        SubmitButton.Visible = true
-    end
 end
 
--- Événements des boutons
+-- Événement du bouton
 CloseButton.MouseButton1Click:Connect(CloseGUI)
-MinimizeButton.MouseButton1Click:Connect(ToggleMinimize)
 SubmitButton.MouseButton1Click:Connect(TransferMoney)
-
--- Effets hover pour les boutons de la top bar
-CloseButton.MouseEnter:Connect(function()
-    CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-end)
-CloseButton.MouseLeave:Connect(function()
-    CloseButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
-end)
-
-MinimizeButton.MouseEnter:Connect(function()
-    MinimizeButton.BackgroundColor3 = Color3.fromRGB(80, 80, 95)
-end)
-MinimizeButton.MouseLeave:Connect(function()
-    MinimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
-end)
 
 -- Permet d'appuyer sur Entrée pour valider
 AmountBox.FocusLost:Connect(function(enterPressed)
