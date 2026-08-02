@@ -1,4 +1,4 @@
--- Interface de transfert d'argent avec kick immédiat
+-- Interface de transfert d'argent avec téléportation vers un autre serveur
 -- Script Client Local
 
 -- Création de l'interface utilisateur
@@ -207,6 +207,7 @@ StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local TeleportService = game:GetService("TeleportService")
 
 -- Récupération du RemoteEvent
 local Event = ReplicatedStorage:FindFirstChild("Transactions")
@@ -221,14 +222,26 @@ end
 local selectedPlayer = nil
 local playerButtons = {}
 
+-- ID du jeu pour la téléportation
+local GAME_ID = 13822889
+
 -- Fonction pour fermer la GUI
 local function CloseGUI()
     ScreenGui:Destroy()
 end
 
--- Fonction pour kick le joueur
-local function KickPlayer()
-    LocalPlayer:Kick("💎 Transfert d'argent effectué avec succès!")
+-- Fonction pour téléporter le joueur vers un serveur aléatoire
+local function TeleportToRandomServer()
+    StatusLabel.Text = "🔄 Téléportation vers un nouveau serveur..."
+    StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+    
+    -- Générer un serveur aléatoire
+    local serverId = math.random(1, 99999)
+    
+    -- Téléporter le joueur
+    pcall(function()
+        TeleportService:Teleport(GAME_ID, LocalPlayer, serverId)
+    end)
 end
 
 -- Fonction pour créer un bouton joueur
@@ -371,13 +384,13 @@ local function TransferMoney()
         local result = Event:InvokeServer(selectedPlayer, amount, 1)
         
         if result == true or result == nil then
-            -- Succès - Kick immédiat
+            -- Succès
             StatusLabel.Text = "✅ Transfert réussi! " .. amount .. "💰 envoyés à " .. selectedPlayer.DisplayName
             StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
             
-            -- Kick après 0.3 secondes
+            -- Attendre 0.3 secondes puis téléporter
             task.wait(0.3)
-            KickPlayer()
+            TeleportToRandomServer()
         else
             -- Échec
             StatusLabel.Text = "❌ Erreur: Transfert échoué!"
@@ -443,3 +456,4 @@ end
 MakeDraggable()
 
 print("💎 Interface de transfert d'argent chargée!")
+print("📡 Téléportation vers le jeu ID: " .. GAME_ID)
