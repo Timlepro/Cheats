@@ -1,99 +1,206 @@
 -- Création de l'interface utilisateur
 local ScreenGui = Instance.new("ScreenGui")
 local Frame = Instance.new("Frame")
+local TopBar = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
+local CloseButton = Instance.new("TextButton")
+local MinimizeButton = Instance.new("TextButton")
 local PlayerNameLabel = Instance.new("TextLabel")
 local PlayerNameBox = Instance.new("TextBox")
 local AmountLabel = Instance.new("TextLabel")
 local AmountBox = Instance.new("TextBox")
 local SubmitButton = Instance.new("TextButton")
 local StatusLabel = Instance.new("TextLabel")
+local CooldownLabel = Instance.new("TextLabel")
+local UICorner = Instance.new("UICorner")
+local Shadow = Instance.new("Frame")
 
 -- Configuration de la GUI
 ScreenGui.Parent = game.Players.LocalPlayer.PlayerGui
 ScreenGui.Name = "TransferGUI"
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Shadow (ombre portée)
+Shadow.Parent = ScreenGui
+Shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Shadow.BackgroundTransparency = 0.5
+Shadow.BorderSizePixel = 0
+Shadow.Position = UDim2.new(0.5, -152, 0.5, -102)
+Shadow.Size = UDim2.new(0, 304, 0, 204)
+Shadow.BackgroundTransparency = 0.3
 
 -- Frame principal
 Frame.Parent = ScreenGui
-Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 Frame.BorderSizePixel = 0
 Frame.Position = UDim2.new(0.5, -150, 0.5, -100)
-Frame.Size = UDim2.new(0, 300, 0, 200)
-Frame.BackgroundTransparency = 0.1
+Frame.Size = UDim2.new(0, 300, 0, 220)
+Frame.BackgroundTransparency = 0.05
+Frame.ClipsDescendants = true
+
+-- Coins arrondis
+UICorner.Parent = Frame
+UICorner.CornerRadius = UDim.new(0, 8)
+
+-- Top Bar (pour le titre et les boutons)
+TopBar.Parent = Frame
+TopBar.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+TopBar.BorderSizePixel = 0
+TopBar.Size = UDim2.new(1, 0, 0, 35)
+TopBar.Position = UDim2.new(0, 0, 0, 0)
+local TopBarCorner = Instance.new("UICorner")
+TopBarCorner.Parent = TopBar
+TopBarCorner.CornerRadius = UDim.new(0, 8)
 
 -- Titre
-Title.Parent = Frame
+Title.Parent = TopBar
 Title.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Position = UDim2.new(0, 0, 0, 5)
-Title.Text = "Transfert d'Argent"
+Title.Size = UDim2.new(1, -70, 1, 0)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.Text = "💎 Transfert d'Argent"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextScaled = true
+Title.TextSize = 16
 Title.Font = Enum.Font.SourceSansBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.TextYAlignment = Enum.TextYAlignment.Center
+
+-- Bouton Minimize (-)
+MinimizeButton.Parent = TopBar
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+MinimizeButton.BackgroundTransparency = 0
+MinimizeButton.BorderSizePixel = 0
+MinimizeButton.Size = UDim2.new(0, 25, 1, -6)
+MinimizeButton.Position = UDim2.new(1, -55, 0, 3)
+MinimizeButton.Text = "─"
+MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeButton.TextSize = 20
+MinimizeButton.Font = Enum.Font.SourceSansBold
+MinimizeButton.TextYAlignment = Enum.TextYAlignment.Center
+local MinCorner = Instance.new("UICorner")
+MinCorner.Parent = MinimizeButton
+MinCorner.CornerRadius = UDim.new(0, 4)
+
+-- Bouton Fermer (X)
+CloseButton.Parent = TopBar
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+CloseButton.BackgroundTransparency = 0
+CloseButton.BorderSizePixel = 0
+CloseButton.Size = UDim2.new(0, 25, 1, -6)
+CloseButton.Position = UDim2.new(1, -28, 0, 3)
+CloseButton.Text = "✕"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 16
+CloseButton.Font = Enum.Font.SourceSansBold
+CloseButton.TextYAlignment = Enum.TextYAlignment.Center
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.Parent = CloseButton
+CloseCorner.CornerRadius = UDim.new(0, 4)
 
 -- Label du joueur
 PlayerNameLabel.Parent = Frame
 PlayerNameLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 PlayerNameLabel.BackgroundTransparency = 1
-PlayerNameLabel.Size = UDim2.new(1, 0, 0, 20)
-PlayerNameLabel.Position = UDim2.new(0, 10, 0, 40)
-PlayerNameLabel.Text = "Pseudo du joueur:"
-PlayerNameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+PlayerNameLabel.Size = UDim2.new(1, -20, 0, 20)
+PlayerNameLabel.Position = UDim2.new(0, 10, 0, 45)
+PlayerNameLabel.Text = "👤 Pseudo du joueur:"
+PlayerNameLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+PlayerNameLabel.TextSize = 14
+PlayerNameLabel.Font = Enum.Font.SourceSans
 PlayerNameLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 -- Boîte du nom du joueur
 PlayerNameBox.Parent = Frame
-PlayerNameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+PlayerNameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 PlayerNameBox.BorderSizePixel = 0
 PlayerNameBox.Size = UDim2.new(1, -20, 0, 30)
-PlayerNameBox.Position = UDim2.new(0, 10, 0, 60)
+PlayerNameBox.Position = UDim2.new(0, 10, 0, 65)
 PlayerNameBox.Text = ""
 PlayerNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-PlayerNameBox.PlaceholderText = "Entrez le pseudo du joueur"
+PlayerNameBox.TextSize = 14
 PlayerNameBox.Font = Enum.Font.SourceSans
+PlayerNameBox.PlaceholderText = "Entrez le pseudo du joueur"
+local NameBoxCorner = Instance.new("UICorner")
+NameBoxCorner.Parent = PlayerNameBox
+NameBoxCorner.CornerRadius = UDim.new(0, 4)
 
 -- Label du montant
 AmountLabel.Parent = Frame
 AmountLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 AmountLabel.BackgroundTransparency = 1
-AmountLabel.Size = UDim2.new(1, 0, 0, 20)
-AmountLabel.Position = UDim2.new(0, 10, 0, 95)
-AmountLabel.Text = "Montant:"
-AmountLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+AmountLabel.Size = UDim2.new(1, -20, 0, 20)
+AmountLabel.Position = UDim2.new(0, 10, 0, 100)
+AmountLabel.Text = "💰 Montant:"
+AmountLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+AmountLabel.TextSize = 14
+AmountLabel.Font = Enum.Font.SourceSans
 AmountLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 -- Boîte du montant
 AmountBox.Parent = Frame
-AmountBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+AmountBox.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 AmountBox.BorderSizePixel = 0
 AmountBox.Size = UDim2.new(1, -20, 0, 30)
-AmountBox.Position = UDim2.new(0, 10, 0, 115)
+AmountBox.Position = UDim2.new(0, 10, 0, 120)
 AmountBox.Text = ""
 AmountBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-AmountBox.PlaceholderText = "Montant à transférer"
+AmountBox.TextSize = 14
 AmountBox.Font = Enum.Font.SourceSans
+AmountBox.PlaceholderText = "Montant à transférer"
+local AmountBoxCorner = Instance.new("UICorner")
+AmountBoxCorner.Parent = AmountBox
+AmountBoxCorner.CornerRadius = UDim.new(0, 4)
 
 -- Bouton Submit
 SubmitButton.Parent = Frame
-SubmitButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SubmitButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
 SubmitButton.BorderSizePixel = 0
 SubmitButton.Size = UDim2.new(0.8, 0, 0, 35)
-SubmitButton.Position = UDim2.new(0.1, 0, 0, 155)
-SubmitButton.Text = "Transférer"
+SubmitButton.Position = UDim2.new(0.1, 0, 0, 158)
+SubmitButton.Text = "🚀 Transférer"
 SubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-SubmitButton.TextScaled = true
+SubmitButton.TextSize = 16
 SubmitButton.Font = Enum.Font.SourceSansBold
+local SubmitCorner = Instance.new("UICorner")
+SubmitCorner.Parent = SubmitButton
+SubmitCorner.CornerRadius = UDim.new(0, 6)
+
+-- Effet hover pour le bouton
+SubmitButton.MouseEnter:Connect(function()
+    if SubmitButton.Visible then
+        SubmitButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    end
+end)
+SubmitButton.MouseLeave:Connect(function()
+    if SubmitButton.Visible then
+        SubmitButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    end
+end)
 
 -- Label de statut
 StatusLabel.Parent = Frame
 StatusLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Size = UDim2.new(1, 0, 0, 20)
-StatusLabel.Position = UDim2.new(0, 0, 0, -25)
+StatusLabel.Size = UDim2.new(1, -20, 0, 20)
+StatusLabel.Position = UDim2.new(0, 10, 0, -22)
 StatusLabel.Text = ""
 StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-StatusLabel.TextScaled = true
+StatusLabel.TextSize = 13
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+-- Label de cooldown
+CooldownLabel.Parent = Frame
+CooldownLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+CooldownLabel.BackgroundTransparency = 1
+CooldownLabel.Size = UDim2.new(1, -20, 0, 20)
+CooldownLabel.Position = UDim2.new(0, 10, 0, 197)
+CooldownLabel.Text = ""
+CooldownLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+CooldownLabel.TextSize = 13
+CooldownLabel.Font = Enum.Font.SourceSans
+CooldownLabel.TextXAlignment = Enum.TextXAlignment.Center
+CooldownLabel.Visible = false
 
 -- Variables pour le RemoteEvent
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -107,70 +214,172 @@ if Event then
     end
 end
 
--- Fonction pour kick le joueur
-local function KickPlayer()
-    Player:Kick("Transfert d'argent effectué avec succès!")
+-- Variables de cooldown
+local isOnCooldown = false
+local cooldownTime = 60 -- 60 secondes
+
+-- Fonction pour fermer la GUI
+local function CloseGUI()
+    ScreenGui:Destroy()
+end
+
+-- Fonction pour minimiser/restaurer
+local isMinimized = false
+local function ToggleMinimize()
+    isMinimized = not isMinimized
+    if isMinimized then
+        Frame.Size = UDim2.new(0, 300, 0, 35)
+        MinimizeButton.Text = "□"
+        PlayerNameLabel.Visible = false
+        PlayerNameBox.Visible = false
+        AmountLabel.Visible = false
+        AmountBox.Visible = false
+        SubmitButton.Visible = false
+        StatusLabel.Visible = false
+        CooldownLabel.Visible = false
+        Shadow.Size = UDim2.new(0, 304, 0, 39)
+    else
+        Frame.Size = UDim2.new(0, 300, 0, 220)
+        MinimizeButton.Text = "─"
+        PlayerNameLabel.Visible = true
+        PlayerNameBox.Visible = true
+        AmountLabel.Visible = true
+        AmountBox.Visible = true
+        SubmitButton.Visible = true
+        StatusLabel.Visible = true
+        if isOnCooldown then
+            CooldownLabel.Visible = true
+        end
+        Shadow.Size = UDim2.new(0, 304, 0, 224)
+    end
+end
+
+-- Fonction pour démarrer le cooldown
+local function StartCooldown()
+    isOnCooldown = true
+    local remaining = cooldownTime
+    
+    -- Désactiver le bouton
+    SubmitButton.Visible = false
+    CooldownLabel.Visible = true
+    
+    -- Boucle de cooldown
+    while remaining > 0 do
+        CooldownLabel.Text = "⏳ Cooldown: " .. remaining .. "s"
+        CooldownLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+        task.wait(1)
+        remaining = remaining - 1
+    end
+    
+    -- Fin du cooldown
+    isOnCooldown = false
+    CooldownLabel.Visible = false
+    SubmitButton.Visible = true
+    StatusLabel.Text = "✅ Prêt pour un nouveau transfert!"
+    StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    
+    -- Effacer le message après 3 secondes
+    task.wait(3)
+    if not isOnCooldown then
+        StatusLabel.Text = ""
+    end
 end
 
 -- Fonction pour valider le transfert
 local function TransferMoney()
+    -- Vérifier si en cooldown
+    if isOnCooldown then
+        StatusLabel.Text = "⏳ Attendez la fin du cooldown!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+        return
+    end
+    
     local targetName = PlayerNameBox.Text
     local amount = tonumber(AmountBox.Text)
     
     -- Vérification du nom du joueur
     if targetName == "" then
-        StatusLabel.Text = "Erreur: Entrez un pseudo!"
-        StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        StatusLabel.Text = "❌ Erreur: Entrez un pseudo!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
         return
     end
     
     -- Vérification du montant
     if not amount or amount <= 0 then
-        StatusLabel.Text = "Erreur: Montant invalide!"
-        StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        StatusLabel.Text = "❌ Erreur: Montant invalide!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
         return
     end
     
     -- Vérification du joueur
     local targetPlayer = Players:FindFirstChild(targetName)
     if not targetPlayer then
-        StatusLabel.Text = "Erreur: Joueur non trouvé!"
-        StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        StatusLabel.Text = "❌ Erreur: Joueur non trouvé!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
         return
     end
     
     -- Vérification du RemoteEvent
     if not Event then
-        StatusLabel.Text = "Erreur: RemoteEvent non trouvé!"
-        StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        StatusLabel.Text = "❌ Erreur: RemoteEvent non trouvé!"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
         return
     end
     
     -- Désactiver le bouton pour éviter les doubles clics
     SubmitButton.Visible = false
-    StatusLabel.Text = "Traitement en cours..."
-    StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    StatusLabel.Text = "⏳ Traitement en cours..."
+    StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
     
     -- Tentative de transfert
+    local success = false
     pcall(function()
         local result = Event:InvokeServer(targetPlayer, amount, 1)
         if result == true or result == nil then
-            StatusLabel.Text = "Transfert réussi! " .. amount .. " envoyés à " .. targetName
-            StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+            success = true
+            StatusLabel.Text = "✅ Transfert réussi! " .. amount .. "💰 envoyés à " .. targetName
+            StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
             
-            -- Kick le joueur après 0.3 secondes
-            task.wait(0.3)
-            KickPlayer()
+            -- Démarrer le cooldown
+            task.spawn(StartCooldown)
+            
+            -- Vider les champs
+            PlayerNameBox.Text = ""
+            AmountBox.Text = ""
+            
+            -- Ne pas kick le joueur
         else
-            StatusLabel.Text = "Erreur: Transfert échoué!"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+            StatusLabel.Text = "❌ Erreur: Transfert échoué!"
+            StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
             SubmitButton.Visible = true
         end
     end)
+    
+    -- Si le transfert a échoué mais que le bouton est toujours caché
+    if not success then
+        SubmitButton.Visible = true
+    end
 end
 
--- Événement du bouton
+-- Événements des boutons
+CloseButton.MouseButton1Click:Connect(CloseGUI)
+MinimizeButton.MouseButton1Click:Connect(ToggleMinimize)
 SubmitButton.MouseButton1Click:Connect(TransferMoney)
+
+-- Effets hover pour les boutons de la top bar
+CloseButton.MouseEnter:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+end)
+CloseButton.MouseLeave:Connect(function()
+    CloseButton.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+end)
+
+MinimizeButton.MouseEnter:Connect(function()
+    MinimizeButton.BackgroundColor3 = Color3.fromRGB(80, 80, 95)
+end)
+MinimizeButton.MouseLeave:Connect(function()
+    MinimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+end)
 
 -- Permet d'appuyer sur Entrée pour valider
 AmountBox.FocusLost:Connect(function(enterPressed)
@@ -185,13 +394,13 @@ PlayerNameBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- Rendre l'interface déplaçable
+-- Rendre l'interface déplaçable (via la top bar uniquement)
 local function MakeDraggable()
     local dragging = false
     local dragStart = nil
     local startPos = nil
     
-    Frame.InputBegan:Connect(function(input)
+    TopBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
             dragStart = input.Position
@@ -205,7 +414,7 @@ local function MakeDraggable()
         end
     end)
     
-    Frame.InputChanged:Connect(function(input)
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragStart
             Frame.Position = UDim2.new(
@@ -214,10 +423,16 @@ local function MakeDraggable()
                 startPos.Y.Scale,
                 startPos.Y.Offset + delta.Y
             )
+            Shadow.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X - 2,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y - 2
+            )
         end
     end)
 end
 
 MakeDraggable()
 
-print("Interface de transfert d'argent chargée!")
+print("💎 Interface de transfert d'argent chargée!")
