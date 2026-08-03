@@ -44,7 +44,7 @@ local Scripts = {
     },
     {
         Name = "none",
-        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/none",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/LobbyBackroomsCompany",
         requirePlaceId = flase,
         PlaceIds = {}
     },
