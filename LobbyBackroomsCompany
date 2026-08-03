@@ -1,271 +1,209 @@
--- LocalScript – s'adapte à tous les chemins possibles
+-- LocalScript - Fonctionne n'importe où dans l'explorateur
 
-local function findLobbyRemote()
-    local rs = game:GetService("ReplicatedStorage")
-    local possiblePaths = {
-        {"remotes", "LobbySetup"},
-        {"remote", "LobbySetup"},
-        {"rmote", "LobbySetup"},
-        {"LobbySetup"} -- direct dans ReplicatedStorage
-    }
+local player = game.Players.LocalPlayer
+if not player then return end
 
-    for _, path in ipairs(possiblePaths) do
-        local current = rs
-        local found = true
-        for _, name in ipairs(path) do
-            current = current:FindFirstChild(name)
-            if not current then
-                found = false
-                break
-            end
-        end
-        if found and current:IsA("RemoteEvent") then
-            warn("✅ Remote trouvée dans : " .. table.concat(path, "."))
-            return current
-        end
-    end
+-- Récupération de la remote (chemin exact)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+local LobbySetup = Remotes and Remotes:FindFirstChild("LobbySetup")
 
-    warn("❌ Remote LobbySetup introuvable dans ReplicatedStorage")
-    warn("🔍 Chemins testés : " .. table.concat(possiblePaths, ", "))
-    return nil
+if not LobbySetup then
+    warn("❌ Remote introuvable : ReplicatedStorage.Remotes.LobbySetup")
+    return
 end
 
-local function createLobbyGUI()
-    local player = game.Players.LocalPlayer
-    if not player then
-        warn("❌ Player introuvable")
-        return
-    end
+-- Création de la GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "LobbySetupGUI"
+screenGui.Parent = player.PlayerGui
+screenGui.ResetOnSpawn = false
 
-    local lobbyRemote = findLobbyRemote()
-    if not lobbyRemote then
-        warn("❌ Impossible de créer la GUI sans la remote")
-        return
-    end
+-- Fenêtre
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 350, 0, 400)
+frame.Position = UDim2.new(0.5, -175, 0.5, -200)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BackgroundTransparency = 0.05
+frame.BorderSizePixel = 2
+frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+frame.Active = true
+frame.Draggable = true
+frame.Parent = screenGui
 
-    -- Supprimer l'ancienne GUI si elle existe
-    local oldGui = player.PlayerGui:FindFirstChild("LobbySetupGUI")
-    if oldGui then oldGui:Destroy() end
+-- Fond semi-transparent
+local bg = Instance.new("Frame")
+bg.Size = UDim2.new(1, 0, 1, 0)
+bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+bg.BackgroundTransparency = 0.7
+bg.BorderSizePixel = 0
+bg.Parent = frame
 
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "LobbySetupGUI"
-    screenGui.Parent = player.PlayerGui
-    screenGui.ResetOnSpawn = false
+-- Titre
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -50, 0, 40)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "🏠 LOBBY SETUP"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 24
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Center
+title.Parent = frame
 
-    -- Fenêtre
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 350, 0, 400)
-    frame.Position = UDim2.new(0.5, -175, 0.5, -200)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    frame.BackgroundTransparency = 0.05
-    frame.BorderSizePixel = 2
-    frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-    frame.Active = true
-    frame.Draggable = true
-    frame.Parent = screenGui
+-- Bouton X (fermer)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 40, 0, 40)
+closeBtn.Position = UDim2.new(1, -45, 0, 2)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 24
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = frame
+closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy() end)
 
-    -- Fond semi-transparent
-    local bg = Instance.new("Frame")
-    bg.Size = UDim2.new(1, 0, 1, 0)
-    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    bg.BackgroundTransparency = 0.7
-    bg.BorderSizePixel = 0
-    bg.Parent = frame
+-- Séparateur
+local sep = Instance.new("Frame")
+sep.Size = UDim2.new(0.9, 0, 0, 2)
+sep.Position = UDim2.new(0.05, 0, 0, 45)
+sep.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+sep.BorderSizePixel = 0
+sep.Parent = frame
 
-    -- Titre
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -50, 0, 40)
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "🏠 LOBBY SETUP"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextSize = 24
-    title.Font = Enum.Font.GothamBold
-    title.TextXAlignment = Enum.TextXAlignment.Center
-    title.Parent = frame
+-- Label Taille
+local sizeLabel = Instance.new("TextLabel")
+sizeLabel.Size = UDim2.new(0.9, 0, 0, 30)
+sizeLabel.Position = UDim2.new(0.05, 0, 0, 55)
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.Text = "📊 Taille du lobby :"
+sizeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+sizeLabel.TextSize = 18
+sizeLabel.Font = Enum.Font.Gotham
+sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+sizeLabel.Parent = frame
 
-    -- Bouton X
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.new(0, 40, 0, 40)
-    close.Position = UDim2.new(1, -45, 0, 2)
-    close.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    close.Text = "✕"
-    close.TextColor3 = Color3.fromRGB(255, 255, 255)
-    close.TextSize = 24
-    close.Font = Enum.Font.GothamBold
-    close.BorderSizePixel = 0
-    close.Parent = frame
-    close.MouseButton1Click:Connect(function() screenGui:Destroy() end)
+-- Conteneur des boutons 1 à 10
+local btnContainer = Instance.new("Frame")
+btnContainer.Size = UDim2.new(0.9, 0, 0, 50)
+btnContainer.Position = UDim2.new(0.05, 0, 0, 90)
+btnContainer.BackgroundTransparency = 1
+btnContainer.Parent = frame
 
-    -- Séparateur
-    local sep = Instance.new("Frame")
-    sep.Size = UDim2.new(0.9, 0, 0, 2)
-    sep.Position = UDim2.new(0.05, 0, 0, 45)
-    sep.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    sep.BorderSizePixel = 0
-    sep.Parent = frame
+local selectedSize = 1
 
-    -- Label Taille
-    local sizeLabel = Instance.new("TextLabel")
-    sizeLabel.Size = UDim2.new(0.9, 0, 0, 30)
-    sizeLabel.Position = UDim2.new(0.05, 0, 0, 55)
-    sizeLabel.BackgroundTransparency = 1
-    sizeLabel.Text = "📊 Taille du lobby :"
-    sizeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    sizeLabel.TextSize = 18
-    sizeLabel.Font = Enum.Font.Gotham
-    sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    sizeLabel.Parent = frame
+for i = 1, 10 do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 28, 0, 28)
+    btn.Position = UDim2.new(0, 5 + ((i - 1) * 32), 0, 10)
+    btn.BackgroundColor3 = (i == 1) and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(55, 55, 55)
+    btn.Text = tostring(i)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.GothamBold
+    btn.BorderSizePixel = 1
+    btn.BorderColor3 = Color3.fromRGB(150, 150, 150)
+    btn.Parent = btnContainer
 
-    -- Container des boutons 1-10
-    local btnContainer = Instance.new("Frame")
-    btnContainer.Size = UDim2.new(0.9, 0, 0, 50)
-    btnContainer.Position = UDim2.new(0.05, 0, 0, 90)
-    btnContainer.BackgroundTransparency = 1
-    btnContainer.Parent = frame
-
-    local selectedSize = 1
-
-    for i = 1, 10 do
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 28, 0, 28)
-        btn.Position = UDim2.new(0, 5 + ((i - 1) * 32), 0, 10)
-        btn.BackgroundColor3 = (i == 1) and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(55, 55, 55)
-        btn.Text = tostring(i)
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.TextSize = 14
-        btn.Font = Enum.Font.GothamBold
-        btn.BorderSizePixel = 1
-        btn.BorderColor3 = Color3.fromRGB(150, 150, 150)
-        btn.Parent = btnContainer
-
-        btn.MouseButton1Click:Connect(function()
-            selectedSize = i
-            for _, child in pairs(btnContainer:GetChildren()) do
-                if child:IsA("TextButton") then
-                    child.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-                end
+    btn.MouseButton1Click:Connect(function()
+        selectedSize = i
+        for _, child in pairs(btnContainer:GetChildren()) do
+            if child:IsA("TextButton") then
+                child.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
             end
-            btn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-            updateInfo()
-        end)
-    end
-
-    -- Séparateur
-    local sep2 = Instance.new("Frame")
-    sep2.Size = UDim2.new(0.9, 0, 0, 2)
-    sep2.Position = UDim2.new(0.05, 0, 0, 150)
-    sep2.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    sep2.BorderSizePixel = 0
-    sep2.Parent = frame
-
-    -- Toggle Friends
-    local friendLabel = Instance.new("TextLabel")
-    friendLabel.Size = UDim2.new(0.5, 0, 0, 35)
-    friendLabel.Position = UDim2.new(0.05, 0, 0, 160)
-    friendLabel.BackgroundTransparency = 1
-    friendLabel.Text = "👥 Amis autorisés :"
-    friendLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    friendLabel.TextSize = 18
-    friendLabel.Font = Enum.Font.Gotham
-    friendLabel.TextXAlignment = Enum.TextXAlignment.Left
-    friendLabel.Parent = frame
-
-    local friendAllowed = false
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0, 60, 0, 35)
-    toggleBtn.Position = UDim2.new(0.65, 0, 0, 160)
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    toggleBtn.Text = "NON"
-    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.TextSize = 16
-    toggleBtn.Font = Enum.Font.GothamBold
-    toggleBtn.BorderSizePixel = 1
-    toggleBtn.BorderColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.Parent = frame
-
-    toggleBtn.MouseButton1Click:Connect(function()
-        friendAllowed = not friendAllowed
-        toggleBtn.BackgroundColor3 = friendAllowed and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-        toggleBtn.Text = friendAllowed and "OUI" or "NON"
+        end
+        btn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
         updateInfo()
     end)
+end
 
-    -- Séparateur
-    local sep3 = Instance.new("Frame")
-    sep3.Size = UDim2.new(0.9, 0, 0, 2)
-    sep3.Position = UDim2.new(0.05, 0, 0, 205)
-    sep3.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-    sep3.BorderSizePixel = 0
-    sep3.Parent = frame
+-- Séparateur
+local sep2 = Instance.new("Frame")
+sep2.Size = UDim2.new(0.9, 0, 0, 2)
+sep2.Position = UDim2.new(0.05, 0, 0, 150)
+sep2.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+sep2.BorderSizePixel = 0
+sep2.Parent = frame
 
-    -- Bouton Créer
-    local createBtn = Instance.new("TextButton")
-    createBtn.Size = UDim2.new(0.6, 0, 0, 50)
-    createBtn.Position = UDim2.new(0.2, 0, 0, 220)
+-- Toggle "Amis autorisés"
+local friendLabel = Instance.new("TextLabel")
+friendLabel.Size = UDim2.new(0.5, 0, 0, 35)
+friendLabel.Position = UDim2.new(0.05, 0, 0, 160)
+friendLabel.BackgroundTransparency = 1
+friendLabel.Text = "👥 Amis autorisés :"
+friendLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+friendLabel.TextSize = 18
+friendLabel.Font = Enum.Font.Gotham
+friendLabel.TextXAlignment = Enum.TextXAlignment.Left
+friendLabel.Parent = frame
+
+local friendAllowed = false
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 60, 0, 35)
+toggleBtn.Position = UDim2.new(0.65, 0, 0, 160)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleBtn.Text = "NON"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 16
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.BorderSizePixel = 1
+toggleBtn.BorderColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Parent = frame
+
+toggleBtn.MouseButton1Click:Connect(function()
+    friendAllowed = not friendAllowed
+    toggleBtn.BackgroundColor3 = friendAllowed and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    toggleBtn.Text = friendAllowed and "OUI" or "NON"
+    updateInfo()
+end)
+
+-- Séparateur
+local sep3 = Instance.new("Frame")
+sep3.Size = UDim2.new(0.9, 0, 0, 2)
+sep3.Position = UDim2.new(0.05, 0, 0, 205)
+sep3.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+sep3.BorderSizePixel = 0
+sep3.Parent = frame
+
+-- Bouton "CRÉER LOBBY"
+local createBtn = Instance.new("TextButton")
+createBtn.Size = UDim2.new(0.6, 0, 0, 50)
+createBtn.Position = UDim2.new(0.2, 0, 0, 220)
+createBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
+createBtn.Text = "🚀 CRÉER LOBBY"
+createBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+createBtn.TextSize = 20
+createBtn.Font = Enum.Font.GothamBold
+createBtn.BorderSizePixel = 2
+createBtn.BorderColor3 = Color3.fromRGB(255, 255, 255)
+createBtn.Parent = frame
+
+createBtn.MouseButton1Click:Connect(function()
+    -- Envoi vers la remote avec les valeurs choisies
+    LobbySetup:FireServer(selectedSize, friendAllowed)
+    
+    -- Feedback visuel
+    createBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    createBtn.Text = "✅ ENVOYÉ !"
+    task.wait(0.5)
     createBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
     createBtn.Text = "🚀 CRÉER LOBBY"
-    createBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    createBtn.TextSize = 20
-    createBtn.Font = Enum.Font.GothamBold
-    createBtn.BorderSizePixel = 2
-    createBtn.BorderColor3 = Color3.fromRGB(255, 255, 255)
-    createBtn.Parent = frame
+end)
 
-    createBtn.MouseButton1Click:Connect(function()
-        warn("📤 Envoi : Taille=" .. selectedSize .. ", Amis=" .. tostring(friendAllowed))
-        local success, err = pcall(function()
-            lobbyRemote:FireServer(selectedSize, friendAllowed)
-        end)
-        if success then
-            warn("✅ Remote envoyée avec succès !")
-            createBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            createBtn.Text = "✅ ENVOYÉ"
-            task.wait(0.5)
-            createBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
-            createBtn.Text = "🚀 CRÉER LOBBY"
-        else
-            warn("❌ Erreur d'envoi : " .. tostring(err))
-            createBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-            createBtn.Text = "❌ ERREUR"
-            task.wait(0.5)
-            createBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
-            createBtn.Text = "🚀 CRÉER LOBBY"
-        end
-    end)
+-- Info en bas
+local info = Instance.new("TextLabel")
+info.Size = UDim2.new(0.9, 0, 0, 25)
+info.Position = UDim2.new(0.05, 0, 0, 290)
+info.BackgroundTransparency = 1
+info.Text = "📌 Taille: 1 | Amis: NON"
+info.TextColor3 = Color3.fromRGB(180, 180, 180)
+info.TextSize = 14
+info.Font = Enum.Font.Gotham
+info.Parent = frame
 
-    -- Info en bas
-    local info = Instance.new("TextLabel")
-    info.Size = UDim2.new(0.9, 0, 0, 25)
-    info.Position = UDim2.new(0.05, 0, 0, 290)
-    info.BackgroundTransparency = 1
-    info.Text = "📌 Taille: 1 | Amis: NON"
-    info.TextColor3 = Color3.fromRGB(180, 180, 180)
-    info.TextSize = 14
-    info.Font = Enum.Font.Gotham
-    info.Parent = frame
-
-    function updateInfo()
-        info.Text = "📌 Taille: " .. selectedSize .. " | Amis: " .. (friendAllowed and "OUI" or "NON")
-    end
-    updateInfo()
-
-    warn("✅ GUI Lobby Setup créée avec succès !")
+-- Mise à jour de l'info
+function updateInfo()
+    info.Text = "📌 Taille: " .. selectedSize .. " | Amis: " .. (friendAllowed and "OUI" or "NON")
 end
-
--- Lancer la GUI
-local player = game.Players.LocalPlayer
-if player then
-    createLobbyGUI()
-else
-    game.Players.LocalPlayerAdded:Connect(createLobbyGUI)
-end
-
--- Commande /lobby pour réouvrir
-if player then
-    player.Chatted:Connect(function(msg)
-        if msg:lower() == "/lobby" then
-            createLobbyGUI()
-        end
-    end)
-end
+updateInfo()
