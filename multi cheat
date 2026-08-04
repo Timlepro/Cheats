@@ -7,13 +7,19 @@ local HttpService = game:GetService("HttpService")
 
 local Scripts = {
     {
-        Name = "Make Someone Fly",
+        Name = "Faire Voler Quelqu'un",
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Make%20someone%20fly",
         requirePlaceId = false,
         PlaceIds = {}
     },
     {
-        Name = "Place ID Finder",
+        Name = "Changeur De Vitesse",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Roblox%20Speed",
+        requirePlaceId = false,
+        PlaceIds = {}
+    },
+    {
+        Name = "Trouveur d'ID",
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Place%20ID%20Finder",
         requirePlaceId = false,
         PlaceIds = {}
@@ -37,15 +43,9 @@ local Scripts = {
         PlaceIds = {13822889}
     },
     {
-        Name = "Roblox Speed",
-        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Roblox%20Speed",
-        requirePlaceId = flase,
-        PlaceIds = {}
-    },
-    {
-        Name = "none",
+        Name = "Vide",
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/none",
-        requirePlaceId = flase,
+        requirePlaceId = false,
         PlaceIds = {}
     },
 }
@@ -246,7 +246,7 @@ Title.Name = "Title"
 Title.Size = UDim2.new(0.4, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "📁 Script Executor"
+Title.Text = "📁 Exécuteur de Scripts"  -- Traduit
 Title.TextColor3 = Color3.fromRGB(220, 220, 230)
 Title.TextSize = GetAdaptiveFontSize()
 Title.TextXAlignment = Enum.TextXAlignment.Left
@@ -611,7 +611,7 @@ local function CreateScriptItem(scriptData, index)
     ToggleButton.BackgroundTransparency = 0.2
     ToggleButton.BorderSizePixel = 1
     ToggleButton.BorderColor3 = ScriptToggles[index] and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
-    ToggleButton.Text = ScriptToggles[index] and "✅ ON" or "❌ OFF"
+    ToggleButton.Text = ScriptToggles[index] and "✅ ACTIVÉ" or "❌ DÉSACTIVÉ"  -- Traduit
     ToggleButton.TextColor3 = ScriptToggles[index] and Color3.fromRGB(180, 255, 200) or Color3.fromRGB(255, 180, 180)
     ToggleButton.TextSize = GetAdaptiveFontSize() - 4
     ToggleButton.Font = Enum.Font.GothamBold
@@ -644,7 +644,7 @@ local function CreateScriptItem(scriptData, index)
     ExecuteButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
     ExecuteButton.BackgroundTransparency = 0.2
     ExecuteButton.BorderSizePixel = 0
-    ExecuteButton.Text = "▶ Run"
+    ExecuteButton.Text = "▶ Exécuter"  -- Traduit
     ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
     ExecuteButton.TextSize = GetAdaptiveFontSize() - 4
     ExecuteButton.Font = Enum.Font.GothamBold
@@ -660,7 +660,7 @@ local function CreateScriptItem(scriptData, index)
         ScriptToggles[index] = not ScriptToggles[index]
         
         if ScriptToggles[index] then
-            ToggleButton.Text = "✅ ON"
+            ToggleButton.Text = "✅ ACTIVÉ"
             ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
             ToggleButton.BorderColor3 = Color3.fromRGB(40, 180, 80)
             ToggleButton.TextColor3 = Color3.fromRGB(180, 255, 200)
@@ -674,7 +674,7 @@ local function CreateScriptItem(scriptData, index)
                 end
             end
         else
-            ToggleButton.Text = "❌ OFF"
+            ToggleButton.Text = "❌ DÉSACTIVÉ"
             ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
             ToggleButton.BorderColor3 = Color3.fromRGB(180, 40, 40)
             ToggleButton.TextColor3 = Color3.fromRGB(255, 180, 180)
@@ -800,12 +800,12 @@ for i = 1, #Scripts do
         local indicator = item:FindFirstChild("AutoIndicator")
         if toggle then
             if ScriptToggles[i] then
-                toggle.Text = "✅ ON"
+                toggle.Text = "✅ ACTIVÉ"
                 toggle.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
                 toggle.BorderColor3 = Color3.fromRGB(40, 180, 80)
                 toggle.TextColor3 = Color3.fromRGB(180, 255, 200)
             else
-                toggle.Text = "❌ OFF"
+                toggle.Text = "❌ DÉSACTIVÉ"
                 toggle.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
                 toggle.BorderColor3 = Color3.fromRGB(180, 40, 40)
                 toggle.TextColor3 = Color3.fromRGB(255, 180, 180)
