@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -45,7 +46,7 @@ local State = {
     FlyEnabled = false,
     FlySpeedValue = 55,
 
-    -- Rotation rapide locale et sans collision.
+    -- Impulsion client sur le personnage local.
     SpinEnabled = false,
 
     NoclipEnabled = false,
@@ -72,14 +73,18 @@ local DefaultJumpHeight = 7.2
 local FlyBodyVelocity = nil
 local FlyBodyGyro = nil
 
--- La rotation agit uniquement sur l'articulation visuelle du personnage.
--- La hitbox principale reste libre : le joueur peut continuer à marcher.
-local SpinMotor = nil
-local SpinOriginalC0 = nil
-local SpinAngle = 0
+-- Objets temporaires du fling client.
+local ActiveFlingBodyVelocity = nil
+local ActiveFlingAngularVelocity = nil
+local ActiveFlingAttachment = nil
+local FlingToken = 0
 
--- 5 400 degrés par seconde = 15 tours complets par seconde.
-local SPIN_SPEED_RADIANS = math.rad(5400)
+local FLING_FORWARD_POWER = 100
+local FLING_UP_POWER = 100
+local FLING_DURATION = 0.16
+
+-- Valeur élevée : rotation très rapide.
+local FLING_ANGULAR_SPEED = 120
 
 -- Deux pressions distinctes sur le bouton de saut activent/désactivent le vol.
 -- Le délai minimum empêche un appui maintenu d'être compté deux fois.
@@ -484,7 +489,7 @@ local FlyToggle = CreateButton(PowersGridHolder, "Vol OFF", 1)
 local NoclipToggle = CreateButton(PowersGridHolder, "Noclip OFF", 1)
 local GodToggle = CreateButton(PowersGridHolder, "God OFF", 1)
 local ESPToggle = CreateButton(PowersGridHolder, "ESP OFF", 1)
-local SpinToggle = CreateButton(PowersGridHolder, "Rotation OFF", 1)
+local SpinToggle = CreateButton(PowersGridHolder, "FLING", 1)
 
 --==================== Joueurs et téléportation =====
 
@@ -719,73 +724,131 @@ local function RestoreMovementValues()
     humanoid.JumpHeight = DefaultJumpHeight
 end
 
---==================== Rotation rapide =============
+--==================== Fling client =================
 
-local function FindSpinMotor(character, root)
-    if not character or not root then
-        return nil
-    end
+local function CreateAttachment(name, parent, offset)
+    local attachment = Instance.new("Attachment")
+    attachment.Name = name
+    attachment.CFrame = offset or CFrame.new()
+    attachment.Parent = parent
 
-    -- Compatible R6 et R15.
-    for _, object in ipairs(character:GetDescendants()) do
-        if object:IsA("Motor6D")
-            and object.Part0 == root
-            and (object.Name == "Root" or object.Name == "RootJoint") then
-            return object
-        end
-    end
-
-    -- Solution de secours si le moteur porte un autre nom.
-    for _, object in ipairs(character:GetDescendants()) do
-        if object:IsA("Motor6D") and object.Part0 == root then
-            return object
-        end
-    end
-
-    return nil
+    return attachment
 end
 
 local function StopSpin()
-    if SpinMotor and SpinMotor.Parent and SpinOriginalC0 then
-        SpinMotor.C0 = SpinOriginalC0
-    end
-
+    FlingToken += 1
     State.SpinEnabled = false
-    SpinMotor = nil
-    SpinOriginalC0 = nil
-    SpinAngle = 0
 
-    SetToggleVisual(SpinToggle, false, "Rotation ON", "Rotation OFF")
+    if ActiveFlingBodyVelocity then
+        ActiveFlingBodyVelocity:Destroy()
+        ActiveFlingBodyVelocity = nil
+    end
+
+    if ActiveFlingAngularVelocity then
+        ActiveFlingAngularVelocity:Destroy()
+        ActiveFlingAngularVelocity = nil
+    end
+
+    if ActiveFlingAttachment then
+        ActiveFlingAttachment:Destroy()
+        ActiveFlingAttachment = nil
+    end
+
+    local _, humanoid = GetCharacterParts()
+
+    if humanoid then
+        humanoid.AutoRotate = true
+    end
+
+    SpinToggle.Text = "FLING"
+    SpinToggle.BackgroundColor3 = COLORS.Element
 end
 
-local function StartSpin()
-    local character, _, root = GetCharacterParts()
+local function ClientFling()
+    local _, humanoid, root = GetCharacterParts()
 
-    if not character or not root then
+    if not humanoid or not root then
         return
     end
 
-    SpinMotor = FindSpinMotor(character, root)
+    -- Arrête les anciens objets avant une nouvelle impulsion.
+    StopSpin()
 
-    if not SpinMotor then
-        warn("Articulation principale du personnage introuvable.")
-        return
+    if State.FlyEnabled then
+        StopFly()
     end
 
-    SpinOriginalC0 = SpinMotor.C0
-    SpinAngle = 0
     State.SpinEnabled = true
+    FlingToken += 1
 
-    -- Le joueur reste non ancré et garde ses collisions normales.
-    SetToggleVisual(SpinToggle, true, "Rotation ON", "Rotation OFF")
-end
+    local currentToken = FlingToken
+    local lookVector = root.CFrame.LookVector
+    local upVector = root.CFrame.UpVector
+    local flingDirection =
+        (lookVector * FLING_FORWARD_POWER)
+        + (upVector * FLING_UP_POWER)
 
-local function ToggleSpin()
-    if State.SpinEnabled then
-        StopSpin()
-    else
-        StartSpin()
-    end
+    -- Le personnage garde son Humanoid actif.
+    -- Cela évite de rester bloqué en PlatformStand.
+    humanoid.PlatformStand = false
+    humanoid.AutoRotate = false
+    humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Name = "ClientFlingVelocity"
+    bodyVelocity.P = 1750
+    bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    bodyVelocity.Velocity = flingDirection
+    bodyVelocity.Parent = root
+    ActiveFlingBodyVelocity = bodyVelocity
+
+    local attachment = CreateAttachment(
+        "ClientFlingAttachment",
+        root,
+        CFrame.new()
+    )
+    ActiveFlingAttachment = attachment
+
+    local angularVelocity = Instance.new("AngularVelocity")
+    angularVelocity.Name = "ClientFlingAngularVelocity"
+    angularVelocity.Attachment0 = attachment
+    angularVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+    angularVelocity.MaxTorque = math.huge
+    angularVelocity.ReactionTorqueEnabled = false
+    angularVelocity.AngularVelocity = Vector3.new(
+        math.random(-FLING_ANGULAR_SPEED, FLING_ANGULAR_SPEED),
+        math.random(-FLING_ANGULAR_SPEED, FLING_ANGULAR_SPEED),
+        math.random(-FLING_ANGULAR_SPEED, FLING_ANGULAR_SPEED)
+    )
+    angularVelocity.Parent = root
+    ActiveFlingAngularVelocity = angularVelocity
+
+    SpinToggle.Text = "FLING..."
+    SpinToggle.BackgroundColor3 = COLORS.Green
+
+    Debris:AddItem(bodyVelocity, FLING_DURATION)
+    Debris:AddItem(angularVelocity, FLING_DURATION)
+    Debris:AddItem(attachment, FLING_DURATION)
+
+    task.delay(FLING_DURATION, function()
+        if State.Closed or currentToken ~= FlingToken then
+            return
+        end
+
+        State.SpinEnabled = false
+        ActiveFlingBodyVelocity = nil
+        ActiveFlingAngularVelocity = nil
+        ActiveFlingAttachment = nil
+
+        if humanoid and humanoid.Parent then
+            humanoid.AutoRotate = true
+        end
+
+        if SpinToggle and SpinToggle.Parent then
+            SpinToggle.Text = "FLING"
+            SpinToggle.BackgroundColor3 = COLORS.Element
+        end
+    end)
 end
 
 --==================== Noclip ======================
@@ -1234,7 +1297,7 @@ Track(FlyToggle.MouseButton1Click:Connect(function()
     ToggleFly()
 end))
 
-Track(SpinToggle.MouseButton1Click:Connect(ToggleSpin))
+Track(SpinToggle.MouseButton1Click:Connect(ClientFling))
 
 Track(NoclipToggle.MouseButton1Click:Connect(function()
     if State.SpinEnabled then
@@ -1352,35 +1415,6 @@ Track(RunService.Heartbeat:Connect(function(deltaTime)
     else
         TeleportTimer = 0
     end
-end))
-
-Track(RunService.RenderStepped:Connect(function(deltaTime)
-    if not State.SpinEnabled then
-        return
-    end
-
-    local character, _, root = GetCharacterParts()
-
-    if not character or not root then
-        StopSpin()
-        return
-    end
-
-    if not SpinMotor or not SpinMotor.Parent then
-        SpinMotor = FindSpinMotor(character, root)
-
-        if not SpinMotor then
-            StopSpin()
-            return
-        end
-
-        SpinOriginalC0 = SpinMotor.C0
-    end
-
-    SpinAngle = (SpinAngle + SPIN_SPEED_RADIANS * deltaTime) % (math.pi * 2)
-
-    -- Tourne le corps visuellement sans bloquer les déplacements du Humanoid.
-    SpinMotor.C0 = SpinOriginalC0 * CFrame.Angles(0, SpinAngle, 0)
 end))
 
 Track(RunService.RenderStepped:Connect(function()
@@ -1569,4 +1603,4 @@ RefreshPlayerList("")
 RefreshESP()
 BindViewportResize()
 
-print("Menu Roblox chargé avec rotation visuelle rapide et déplacement conservé.")
+print("Menu Roblox chargé avec fling client local.")
