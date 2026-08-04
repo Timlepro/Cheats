@@ -46,7 +46,6 @@ local State = {
     FlySpeedValue = 55,
 
     NoclipEnabled = false,
-    GodEnabled = false,
     ESPEnabled = false,
 
     SelectedPlayer = nil,
@@ -388,7 +387,7 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
 local BASE_WIDTH = 300
-local BASE_HEIGHT = 330
+local BASE_HEIGHT = 300
 local TITLE_HEIGHT = 34
 local TABS_HEIGHT = 30
 local MAX_INTERFACE_SCALE = 0.92
@@ -452,7 +451,7 @@ TitleLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -82, 1, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Menu de test"
+TitleLabel.Text = "Menu God MOD"
 TitleLabel.TextColor3 = COLORS.Text
 TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.GothamBold
@@ -475,7 +474,7 @@ local CloseButton = Instance.new("TextButton")
 CloseButton.Size = UDim2.fromOffset(28, 28)
 CloseButton.BackgroundColor3 = COLORS.Red
 CloseButton.BorderSizePixel = 0
-CloseButton.Text = "×"
+CloseButton.Text = "X"
 CloseButton.TextColor3 = COLORS.Text
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
@@ -502,7 +501,7 @@ OpenMenuButton.Name = "OpenMenuButton"
 OpenMenuButton.Size = UDim2.fromScale(1, 1)
 OpenMenuButton.BackgroundColor3 = COLORS.Green
 OpenMenuButton.BorderSizePixel = 0
-OpenMenuButton.Text = "☰  MENU"
+OpenMenuButton.Text = "🔎 MENU"
 OpenMenuButton.TextColor3 = COLORS.Text
 OpenMenuButton.TextSize = 11
 OpenMenuButton.Font = Enum.Font.GothamBold
@@ -557,11 +556,11 @@ ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 --==================== Réglages des valeurs ========
 
-local MovementSection = CreateSection(Content, "Réglages des valeurs", 146)
+local MovementSection = CreateSection(Content, "Réglages", 146)
 
 local SpeedRow = CreateRow(MovementSection, 34, 6)
 
-local SpeedLabel = CreateLabel(SpeedRow, "Vitesse au sol", 34)
+local SpeedLabel = CreateLabel(SpeedRow, "Vitesse 🚀", 34)
 SpeedLabel.Size = UDim2.new(0.40, 0, 1, 0)
 
 local SpeedBox = CreateTextBox(SpeedRow, "16", "Valeur", 0.23)
@@ -569,7 +568,7 @@ local SpeedToggle = CreateButton(SpeedRow, "OFF", 0.27)
 
 local JumpRow = CreateRow(MovementSection, 34, 6)
 
-local JumpLabel = CreateLabel(JumpRow, "Puissance du saut", 34)
+local JumpLabel = CreateLabel(JumpRow, "Puissance du saut 🐇", 34)
 JumpLabel.Size = UDim2.new(0.40, 0, 1, 0)
 
 local JumpBox = CreateTextBox(JumpRow, "50", "Valeur", 0.23)
@@ -577,36 +576,35 @@ local JumpToggle = CreateButton(JumpRow, "OFF", 0.27)
 
 local FlySpeedRow = CreateRow(MovementSection, 34, 6)
 
-local FlySpeedLabel = CreateLabel(FlySpeedRow, "Vitesse de vol", 34)
+local FlySpeedLabel = CreateLabel(FlySpeedRow, "Vitesse de vol 🦅", 34)
 FlySpeedLabel.Size = UDim2.new(0.58, 0, 1, 0)
 
 local FlySpeedBox = CreateTextBox(FlySpeedRow, "55", "Valeur", 0.34)
 
 --==================== Fonctions du personnage =====
 
-local PowersSection = CreateSection(Content, "Fonctions du personnage", 116)
+local PowersSection = CreateSection(Content, "Fonctions", 80)
 
 local PowersGridHolder = Instance.new("Frame")
-PowersGridHolder.Size = UDim2.new(1, 0, 0, 72)
+PowersGridHolder.Size = UDim2.new(1, 0, 0, 34)
 PowersGridHolder.BackgroundTransparency = 1
 PowersGridHolder.ClipsDescendants = true
 PowersGridHolder.Parent = PowersSection
 
 local PowersGrid = Instance.new("UIGridLayout")
-PowersGrid.CellSize = UDim2.new(0.5, -4, 0, 32)
-PowersGrid.CellPadding = UDim2.fromOffset(8, 6)
-PowersGrid.FillDirectionMaxCells = 2
+PowersGrid.CellSize = UDim2.new(0.333, -5, 0, 32)
+PowersGrid.CellPadding = UDim2.fromOffset(7, 0)
+PowersGrid.FillDirectionMaxCells = 3
 PowersGrid.SortOrder = Enum.SortOrder.LayoutOrder
 PowersGrid.Parent = PowersGridHolder
 
 local FlyToggle = CreateButton(PowersGridHolder, "Vol OFF", 1)
 local NoclipToggle = CreateButton(PowersGridHolder, "Noclip OFF", 1)
-local GodToggle = CreateButton(PowersGridHolder, "God OFF", 1)
 local ESPToggle = CreateButton(PowersGridHolder, "ESP OFF", 1)
 
 --==================== Joueurs et téléportation =====
 
-local TeleportSection = CreateSection(Content, "Joueurs et téléportation", 210)
+local TeleportSection = CreateSection(Content, "Téléportation", 210)
 
 local SearchRow = CreateRow(TeleportSection, 34, 6)
 
@@ -620,7 +618,7 @@ DistanceLabel.TextSize = 11
 
 local TeleportButtonsRow = CreateRow(TeleportSection, 34, 6)
 
-local TeleportOnceButton = CreateButton(TeleportButtonsRow, "Téléporter 1 fois", 0.49)
+local TeleportOnceButton = CreateButton(TeleportButtonsRow, "Téléporter", 0.49)
 TeleportOnceButton.BackgroundColor3 = COLORS.Blue
 
 local TeleportContinuousButton = CreateButton(TeleportButtonsRow, "Suivi OFF", 0.49)
@@ -683,7 +681,7 @@ local RecenterToggle = CreateButton(RecenterRow, "ON", 0.30)
 SetToggleVisual(RecenterToggle, true, "ON", "OFF")
 
 local LockRow = CreateRow(DisplaySection, 34, 6)
-local LockLabel = CreateLabel(LockRow, "Verrouiller la fenêtre", 34)
+local LockLabel = CreateLabel(LockRow, "Verrouiller la position", 34)
 LockLabel.Size = UDim2.new(0.66, 0, 1, 0)
 local LockToggle = CreateButton(LockRow, "OFF", 0.30)
 
@@ -1443,11 +1441,6 @@ Track(NoclipToggle.MouseButton1Click:Connect(function()
     SetNoclip(not State.NoclipEnabled)
 end))
 
-Track(GodToggle.MouseButton1Click:Connect(function()
-    State.GodEnabled = not State.GodEnabled
-    SetToggleVisual(GodToggle, State.GodEnabled, "God ON", "God OFF")
-end))
-
 Track(ESPToggle.MouseButton1Click:Connect(function()
     SetESP(not State.ESPEnabled)
 end))
@@ -1561,10 +1554,6 @@ Track(RunService.Heartbeat:Connect(function(deltaTime)
         if State.JumpEnabled then
             humanoid.UseJumpPower = true
             humanoid.JumpPower = State.JumpValue
-        end
-
-        if State.GodEnabled and humanoid.Health > 0 then
-            humanoid.Health = humanoid.MaxHealth
         end
     end
 
@@ -1767,5 +1756,3 @@ UpdateDistanceDisplay(0)
 RefreshPlayerList("")
 RefreshESP()
 BindViewportResize()
-
-print("Menu Roblox compact chargé sans fonction fling.")
