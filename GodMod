@@ -46,11 +46,8 @@ local State = {
     FlyEnabled = false,
     FlySpeedValue = 55,
 
-    -- Impulsion client sur le personnage local.
+    -- Effet de rotation visuelle locale, sans déplacement physique.
     SpinEnabled = false,
-
-    -- Vue locale contrôlée avec une fausse part.
-    GhostViewEnabled = false,
 
     NoclipEnabled = false,
     GodEnabled = false,
@@ -62,6 +59,13 @@ local State = {
 
     Minimized = false,
     Closed = false,
+
+    RecenterOnOpen = true,
+    LockWindow = false,
+    MenuOpacity = 1,
+    ManualScale = 1,
+    OpenButtonHeight = 0.30,
+    ActiveTab = "Main",
 }
 
 local Character = nil
@@ -76,24 +80,12 @@ local DefaultJumpHeight = 7.2
 local FlyBodyVelocity = nil
 local FlyBodyGyro = nil
 
--- Objets temporaires du fling client.
-local ActiveFlingBodyVelocity = nil
-local ActiveFlingAngularVelocity = nil
-local ActiveFlingAttachment = nil
-local FlingToken = 0
-
-local FLING_FORWARD_POWER = 100
-local FLING_UP_POWER = 100
-local FLING_DURATION = 0.16
-
--- Valeur élevée : rotation très rapide.
-local FLING_ANGULAR_SPEED = 120
-
--- Vue locale : la fausse part et la caméra existent seulement sur ce client.
-local GhostPart = nil
-local GhostOriginalCameraSubject = nil
-local GhostOriginalCameraType = nil
-local GHOST_MOVE_SPEED = 70
+-- Effet visuel de rotation : aucune force physique n'est appliquée.
+local SpinMotor = nil
+local SpinOriginalC0 = nil
+local SpinToken = 0
+local SPIN_DURATION = 0.85
+local SPIN_SPEED_RADIANS = math.rad(7200)
 
 -- Deux pressions distinctes sur le bouton de saut activent/désactivent le vol.
 -- Le délai minimum empêche un appui maintenu d'être compté deux fois.
@@ -247,6 +239,109 @@ local function CreateRow(parent, height, spacing)
     return row
 end
 
+local function CreateSlider(parent, labelText, minimum, maximum, initialValue, formatter, onChanged)
+    local row = CreateRow(parent, 42, 6)
+
+    local label = CreateLabel(row, labelText, 42)
+    label.Size = UDim2.new(0.42, 0, 1, 0)
+    label.TextSize = 11
+
+    local valueLabel = CreateLabel(row, "", 42)
+    valueLabel.Size = UDim2.new(0.16, 0, 1, 0)
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Center
+    valueLabel.TextSize = 11
+
+    local slider = Instance.new("TextButton")
+    slider.Size = UDim2.new(0.38, 0, 0, 18)
+    slider.BackgroundColor3 = COLORS.Element
+    slider.BorderSizePixel = 0
+    slider.Text = ""
+    slider.AutoButtonColor = false
+    slider.Parent = row
+    AddCorner(slider, 9)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.fromScale(0, 1)
+    fill.BackgroundColor3 = COLORS.Green
+    fill.BorderSizePixel = 0
+    fill.Parent = slider
+    AddCorner(fill, 9)
+
+    local knob = Instance.new("Frame")
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Size = UDim2.fromOffset(14, 14)
+    knob.Position = UDim2.fromScale(0, 0.5)
+    knob.BackgroundColor3 = COLORS.Text
+    knob.BorderSizePixel = 0
+    knob.Parent = slider
+    AddCorner(knob, 7)
+
+    local dragging = false
+    local currentValue = initialValue
+
+    local function SetValue(value, fireCallback)
+        currentValue = math.clamp(value, minimum, maximum)
+
+        local alpha = 0
+        if maximum > minimum then
+            alpha = (currentValue - minimum) / (maximum - minimum)
+        end
+
+        fill.Size = UDim2.fromScale(alpha, 1)
+        knob.Position = UDim2.fromScale(alpha, 0.5)
+        valueLabel.Text = formatter and formatter(currentValue) or tostring(currentValue)
+
+        if fireCallback ~= false and onChanged then
+            onChanged(currentValue)
+        end
+    end
+
+    local function SetFromX(x)
+        local width = slider.AbsoluteSize.X
+        if width <= 0 then
+            return
+        end
+
+        local alpha = math.clamp(
+            (x - slider.AbsolutePosition.X) / width,
+            0,
+            1
+        )
+
+        SetValue(minimum + (maximum - minimum) * alpha, true)
+    end
+
+    Track(slider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            SetFromX(input.Position.X)
+        end
+    end))
+
+    Track(UserInputService.InputChanged:Connect(function(input)
+        if not dragging then
+            return
+        end
+
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            SetFromX(input.Position.X)
+        end
+    end))
+
+    Track(UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end))
+
+    SetValue(initialValue, false)
+
+    return SetValue
+end
+
 local function SetToggleVisual(button, enabled, onText, offText)
     button.Text = enabled and onText or offText
     button.BackgroundColor3 = enabled and COLORS.Green or COLORS.Element
@@ -307,12 +402,13 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
 local BASE_WIDTH = 330
-local BASE_HEIGHT = 380
+local BASE_HEIGHT = 400
 local TITLE_HEIGHT = 36
+local TABS_HEIGHT = 34
 local MAX_INTERFACE_SCALE = 0.92
 local MIN_INTERFACE_SCALE = 0.50
 
-local MainFrame = Instance.new("Frame")
+local MainFrame = Instance.new("CanvasGroup")
 MainFrame.Name = "MainFrame"
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.Size = UDim2.fromOffset(BASE_WIDTH, BASE_HEIGHT)
@@ -321,8 +417,8 @@ MainFrame.BackgroundColor3 = COLORS.Background
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.ClipsDescendants = true
+MainFrame.GroupTransparency = 0
 MainFrame.Parent = ScreenGui
-AddCorner(MainFrame, 16)
 AddStroke(MainFrame, COLORS.Border, 1)
 
 local InterfaceScale = Instance.new("UIScale")
@@ -339,11 +435,13 @@ local function UpdateInterfaceScale()
     local widthScale = (viewport.X - 20) / BASE_WIDTH
     local heightScale = (viewport.Y - 40) / BASE_HEIGHT
 
-    InterfaceScale.Scale = math.clamp(
+    local automaticScale = math.clamp(
         math.min(widthScale, heightScale, MAX_INTERFACE_SCALE),
         MIN_INTERFACE_SCALE,
         MAX_INTERFACE_SCALE
     )
+
+    InterfaceScale.Scale = automaticScale * State.ManualScale
 end
 
 local MainLayout = AddListLayout(MainFrame, Enum.FillDirection.Vertical, 0)
@@ -376,8 +474,8 @@ TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
 
 local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Size = UDim2.fromOffset(30, 24)
-MinimizeButton.BackgroundColor3 = COLORS.Element
+MinimizeButton.Size = UDim2.fromOffset(28, 28)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(205, 155, 45)
 MinimizeButton.BorderSizePixel = 0
 MinimizeButton.Text = "−"
 MinimizeButton.TextColor3 = COLORS.Text
@@ -385,10 +483,10 @@ MinimizeButton.TextSize = 19
 MinimizeButton.Font = Enum.Font.GothamBold
 MinimizeButton.AutoButtonColor = false
 MinimizeButton.Parent = TitleBar
-AddCorner(MinimizeButton, 14)
+AddCorner(MinimizeButton, 6)
 
 local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.fromOffset(30, 24)
+CloseButton.Size = UDim2.fromOffset(28, 28)
 CloseButton.BackgroundColor3 = COLORS.Red
 CloseButton.BorderSizePixel = 0
 CloseButton.Text = "×"
@@ -397,7 +495,7 @@ CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
 CloseButton.AutoButtonColor = false
 CloseButton.Parent = TitleBar
-AddCorner(CloseButton, 14)
+AddCorner(CloseButton, 6)
 
 --==================== Bouton latéral d'ouverture ==
 
@@ -431,11 +529,32 @@ local OpenButtonScale = Instance.new("UIScale")
 OpenButtonScale.Scale = 1
 OpenButtonScale.Parent = OpenMenuCanvas
 
+--==================== Onglets =====================
+
+local TabsBar = Instance.new("Frame")
+TabsBar.Name = "TabsBar"
+TabsBar.Size = UDim2.new(1, 0, 0, TABS_HEIGHT)
+TabsBar.BackgroundColor3 = COLORS.Panel
+TabsBar.BorderSizePixel = 0
+TabsBar.LayoutOrder = 2
+TabsBar.Parent = MainFrame
+AddPadding(TabsBar, 8, 8, 4, 4)
+
+local TabsLayout = AddListLayout(TabsBar, Enum.FillDirection.Horizontal, 6)
+TabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+TabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+local MainTabButton = CreateButton(TabsBar, "Principal", 0.48)
+MainTabButton.Size = UDim2.new(0.48, 0, 1, 0)
+
+local SettingsTabButton = CreateButton(TabsBar, "Paramètres", 0.48)
+SettingsTabButton.Size = UDim2.new(0.48, 0, 1, 0)
+
 --==================== Contenu avec UIListLayout ===
 
 local Content = Instance.new("ScrollingFrame")
 Content.Name = "Content"
-Content.Size = UDim2.new(1, 0, 1, -TITLE_HEIGHT)
+Content.Size = UDim2.new(1, 0, 1, -(TITLE_HEIGHT + TABS_HEIGHT))
 Content.BackgroundTransparency = 1
 Content.BorderSizePixel = 0
 Content.ClipsDescendants = true
@@ -443,7 +562,7 @@ Content.CanvasSize = UDim2.fromOffset(0, 0)
 Content.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Content.ScrollBarThickness = 5
 Content.ScrollBarImageColor3 = COLORS.Border
-Content.LayoutOrder = 2
+Content.LayoutOrder = 3
 Content.Parent = MainFrame
 AddPadding(Content, 8, 8, 8, 8)
 
@@ -498,8 +617,7 @@ local FlyToggle = CreateButton(PowersGridHolder, "Vol OFF", 1)
 local NoclipToggle = CreateButton(PowersGridHolder, "Noclip OFF", 1)
 local GodToggle = CreateButton(PowersGridHolder, "God OFF", 1)
 local ESPToggle = CreateButton(PowersGridHolder, "ESP OFF", 1)
-local SpinToggle = CreateButton(PowersGridHolder, "FLING", 1)
-local GhostToggle = CreateButton(PowersGridHolder, "Vue locale OFF", 1)
+local SpinToggle = CreateButton(PowersGridHolder, "Effet fling", 1)
 
 --==================== Joueurs et téléportation =====
 
@@ -543,6 +661,129 @@ AddPadding(PlayerListFrame, 6, 6, 6, 6)
 local PlayerListLayout = AddListLayout(PlayerListFrame, Enum.FillDirection.Vertical, 5)
 PlayerListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
+--==================== Onglet paramètres ===========
+
+local SettingsContent = Instance.new("ScrollingFrame")
+SettingsContent.Name = "SettingsContent"
+SettingsContent.Size = UDim2.new(1, 0, 1, -(TITLE_HEIGHT + TABS_HEIGHT))
+SettingsContent.BackgroundTransparency = 1
+SettingsContent.BorderSizePixel = 0
+SettingsContent.ClipsDescendants = true
+SettingsContent.CanvasSize = UDim2.fromOffset(0, 0)
+SettingsContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+SettingsContent.ScrollBarThickness = 5
+SettingsContent.ScrollBarImageColor3 = COLORS.Border
+SettingsContent.LayoutOrder = 3
+SettingsContent.Visible = false
+SettingsContent.Parent = MainFrame
+AddPadding(SettingsContent, 8, 8, 8, 8)
+
+local SettingsLayout = AddListLayout(
+    SettingsContent,
+    Enum.FillDirection.Vertical,
+    6
+)
+SettingsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local DisplaySection = CreateSection(
+    SettingsContent,
+    "Affichage du menu",
+    238
+)
+
+local RecenterRow = CreateRow(DisplaySection, 34, 6)
+local RecenterLabel = CreateLabel(RecenterRow, "Recentrer à l'ouverture", 34)
+RecenterLabel.Size = UDim2.new(0.66, 0, 1, 0)
+local RecenterToggle = CreateButton(RecenterRow, "ON", 0.30)
+SetToggleVisual(RecenterToggle, true, "ON", "OFF")
+
+local LockRow = CreateRow(DisplaySection, 34, 6)
+local LockLabel = CreateLabel(LockRow, "Verrouiller la fenêtre", 34)
+LockLabel.Size = UDim2.new(0.66, 0, 1, 0)
+local LockToggle = CreateButton(LockRow, "OFF", 0.30)
+
+local SetOpacitySlider = CreateSlider(
+    DisplaySection,
+    "Opacité",
+    0.35,
+    1,
+    State.MenuOpacity,
+    function(value)
+        return string.format("%d%%", math.floor(value * 100 + 0.5))
+    end,
+    function(value)
+        State.MenuOpacity = value
+        MainFrame.GroupTransparency = 1 - value
+    end
+)
+
+local SetScaleSlider = CreateSlider(
+    DisplaySection,
+    "Taille du menu",
+    0.60,
+    1,
+    State.ManualScale,
+    function(value)
+        return string.format("%d%%", math.floor(value * 100 + 0.5))
+    end,
+    function(value)
+        State.ManualScale = value
+        UpdateInterfaceScale()
+    end
+)
+
+local SetSideHeightSlider = CreateSlider(
+    DisplaySection,
+    "Hauteur bouton",
+    0.10,
+    0.80,
+    State.OpenButtonHeight,
+    function(value)
+        return string.format("%d%%", math.floor(value * 100 + 0.5))
+    end,
+    function(value)
+        State.OpenButtonHeight = value
+        OpenMenuCanvas.Position = UDim2.new(0, 8, value, 0)
+    end
+)
+
+local ActionsSection = CreateSection(
+    SettingsContent,
+    "Actions rapides",
+    112
+)
+
+local CenterNowButton = CreateButton(
+    ActionsSection,
+    "Recentrer maintenant",
+    1
+)
+CenterNowButton.Size = UDim2.new(1, 0, 0, 34)
+CenterNowButton.BackgroundColor3 = COLORS.Blue
+
+local ResetSettingsButton = CreateButton(
+    ActionsSection,
+    "Réinitialiser les paramètres",
+    1
+)
+ResetSettingsButton.Size = UDim2.new(1, 0, 0, 34)
+
+local function SetActiveTab(tabName)
+    State.ActiveTab = tabName
+
+    local showMain = tabName == "Main"
+    Content.Visible = showMain
+    SettingsContent.Visible = not showMain
+
+    MainTabButton.BackgroundColor3 =
+        showMain and COLORS.Green or COLORS.Element
+
+    SettingsTabButton.BackgroundColor3 =
+        showMain and COLORS.Element or COLORS.Green
+end
+
+SetActiveTab("Main")
+
 --==================== Déplacement de la fenêtre ===
 
 local Dragging = false
@@ -551,6 +792,10 @@ local DragStart = nil
 local StartPosition = nil
 
 Track(TitleBar.InputBegan:Connect(function(input)
+    if State.LockWindow then
+        return
+    end
+
     local validInput =
         input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch
@@ -734,214 +979,105 @@ local function RestoreMovementValues()
     humanoid.JumpHeight = DefaultJumpHeight
 end
 
---==================== Fling client =================
+--==================== Effet fling visuel ===========
 
-local function CreateAttachment(name, parent, offset)
-    local attachment = Instance.new("Attachment")
-    attachment.Name = name
-    attachment.CFrame = offset or CFrame.new()
-    attachment.Parent = parent
+local function FindSpinMotor(character, root)
+    if not character or not root then
+        return nil
+    end
 
-    return attachment
+    for _, object in ipairs(character:GetDescendants()) do
+        if object:IsA("Motor6D")
+            and object.Part0 == root
+            and (object.Name == "Root" or object.Name == "RootJoint") then
+            return object
+        end
+    end
+
+    for _, object in ipairs(character:GetDescendants()) do
+        if object:IsA("Motor6D") and object.Part0 == root then
+            return object
+        end
+    end
+
+    return nil
 end
 
 local function StopSpin()
-    FlingToken += 1
+    SpinToken += 1
     State.SpinEnabled = false
 
-    if ActiveFlingBodyVelocity then
-        ActiveFlingBodyVelocity:Destroy()
-        ActiveFlingBodyVelocity = nil
+    if SpinMotor and SpinMotor.Parent and SpinOriginalC0 then
+        SpinMotor.C0 = SpinOriginalC0
     end
 
-    if ActiveFlingAngularVelocity then
-        ActiveFlingAngularVelocity:Destroy()
-        ActiveFlingAngularVelocity = nil
+    SpinMotor = nil
+    SpinOriginalC0 = nil
+
+    if SpinToggle and SpinToggle.Parent then
+        SpinToggle.Text = "Effet fling"
+        SpinToggle.BackgroundColor3 = COLORS.Element
     end
-
-    if ActiveFlingAttachment then
-        ActiveFlingAttachment:Destroy()
-        ActiveFlingAttachment = nil
-    end
-
-    local _, humanoid = GetCharacterParts()
-
-    if humanoid then
-        humanoid.AutoRotate = true
-    end
-
-    SpinToggle.Text = "FLING"
-    SpinToggle.BackgroundColor3 = COLORS.Element
 end
 
 local function ClientFling()
-    local _, humanoid, root = GetCharacterParts()
+    local character, _, root = GetCharacterParts()
 
-    if not humanoid or not root then
+    if not character or not root then
         return
     end
 
-    -- Arrête les anciens objets avant une nouvelle impulsion.
     StopSpin()
 
-    if State.FlyEnabled then
-        StopFly()
-    end
-
-    State.SpinEnabled = true
-    FlingToken += 1
-
-    local currentToken = FlingToken
-    local lookVector = root.CFrame.LookVector
-    local upVector = root.CFrame.UpVector
-    local flingDirection =
-        (lookVector * FLING_FORWARD_POWER)
-        + (upVector * FLING_UP_POWER)
-
-    -- Le personnage garde son Humanoid actif.
-    -- Cela évite de rester bloqué en PlatformStand.
-    humanoid.PlatformStand = false
-    humanoid.AutoRotate = false
-    humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
-
-    local bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.Name = "ClientFlingVelocity"
-    bodyVelocity.P = 1750
-    bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    bodyVelocity.Velocity = flingDirection
-    bodyVelocity.Parent = root
-    ActiveFlingBodyVelocity = bodyVelocity
-
-    local attachment = CreateAttachment(
-        "ClientFlingAttachment",
-        root,
-        CFrame.new()
-    )
-    ActiveFlingAttachment = attachment
-
-    local angularVelocity = Instance.new("AngularVelocity")
-    angularVelocity.Name = "ClientFlingAngularVelocity"
-    angularVelocity.Attachment0 = attachment
-    angularVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
-    angularVelocity.MaxTorque = math.huge
-    angularVelocity.ReactionTorqueEnabled = false
-    angularVelocity.AngularVelocity = Vector3.new(
-        math.random(-FLING_ANGULAR_SPEED, FLING_ANGULAR_SPEED),
-        math.random(-FLING_ANGULAR_SPEED, FLING_ANGULAR_SPEED),
-        math.random(-FLING_ANGULAR_SPEED, FLING_ANGULAR_SPEED)
-    )
-    angularVelocity.Parent = root
-    ActiveFlingAngularVelocity = angularVelocity
-
-    SpinToggle.Text = "FLING..."
-    SpinToggle.BackgroundColor3 = COLORS.Green
-
-    Debris:AddItem(bodyVelocity, FLING_DURATION)
-    Debris:AddItem(angularVelocity, FLING_DURATION)
-    Debris:AddItem(attachment, FLING_DURATION)
-
-    task.delay(FLING_DURATION, function()
-        if State.Closed or currentToken ~= FlingToken then
-            return
-        end
-
-        State.SpinEnabled = false
-        ActiveFlingBodyVelocity = nil
-        ActiveFlingAngularVelocity = nil
-        ActiveFlingAttachment = nil
-
-        if humanoid and humanoid.Parent then
-            humanoid.AutoRotate = true
-        end
-
-        if SpinToggle and SpinToggle.Parent then
-            SpinToggle.Text = "FLING"
-            SpinToggle.BackgroundColor3 = COLORS.Element
-        end
-    end)
-end
-
---==================== Vue locale ===================
-
-local function StopGhostView()
-    State.GhostViewEnabled = false
-
-    local camera = Workspace.CurrentCamera
-    local _, humanoid = GetCharacterParts()
-
-    if camera then
-        camera.CameraType =
-            GhostOriginalCameraType
-            or Enum.CameraType.Custom
-
-        camera.CameraSubject =
-            GhostOriginalCameraSubject
-            or humanoid
-    end
-
-    GhostOriginalCameraSubject = nil
-    GhostOriginalCameraType = nil
-
-    if GhostPart then
-        GhostPart:Destroy()
-        GhostPart = nil
-    end
-
-    SetToggleVisual(
-        GhostToggle,
-        false,
-        "Vue locale ON",
-        "Vue locale OFF"
-    )
-end
-
-local function StartGhostView()
-    local _, humanoid, root = GetCharacterParts()
-    local camera = Workspace.CurrentCamera
-
-    if not humanoid or not root or not camera then
+    SpinMotor = FindSpinMotor(character, root)
+    if not SpinMotor then
+        warn("Articulation principale du personnage introuvable.")
         return
     end
 
-    StopGhostView()
+    SpinOriginalC0 = SpinMotor.C0
+    State.SpinEnabled = true
+    SpinToken += 1
 
-    GhostOriginalCameraSubject = camera.CameraSubject
-    GhostOriginalCameraType = camera.CameraType
+    local currentToken = SpinToken
+    local startTime = os.clock()
+    local lastTime = startTime
+    local angle = 0
 
-    local fakePart = Instance.new("Part")
-    fakePart.Name = "LocalGhostCameraPart"
-    fakePart.Size = Vector3.new(3, 3, 3)
-    fakePart.CFrame = root.CFrame
-    fakePart.Anchored = true
-    fakePart.CanCollide = false
-    fakePart.CanTouch = false
-    fakePart.CanQuery = false
-    fakePart.Massless = true
-    fakePart.Transparency = 0.45
-    fakePart.Material = Enum.Material.ForceField
-    fakePart.Color = COLORS.Green
-    fakePart.Parent = Workspace
+    SpinToggle.Text = "Effet..."
+    SpinToggle.BackgroundColor3 = COLORS.Green
 
-    GhostPart = fakePart
-    State.GhostViewEnabled = true
+    task.spawn(function()
+        while State.SpinEnabled
+            and currentToken == SpinToken
+            and SpinMotor
+            and SpinMotor.Parent do
 
-    camera.CameraType = Enum.CameraType.Custom
-    camera.CameraSubject = fakePart
+            local now = os.clock()
+            local elapsed = now - startTime
+            local deltaTime = now - lastTime
+            lastTime = now
 
-    SetToggleVisual(
-        GhostToggle,
-        true,
-        "Vue locale ON",
-        "Vue locale OFF"
-    )
-end
+            if elapsed >= SPIN_DURATION then
+                break
+            end
 
-local function ToggleGhostView()
-    if State.GhostViewEnabled then
-        StopGhostView()
-    else
-        StartGhostView()
-    end
+            angle += SPIN_SPEED_RADIANS * deltaTime
+
+            local wobbleX = math.sin(elapsed * 35) * math.rad(18)
+            local wobbleZ = math.cos(elapsed * 31) * math.rad(18)
+
+            SpinMotor.C0 =
+                SpinOriginalC0
+                * CFrame.Angles(wobbleX, angle, wobbleZ)
+
+            RunService.RenderStepped:Wait()
+        end
+
+        if currentToken == SpinToken then
+            StopSpin()
+        end
+    end)
 end
 
 --==================== Noclip ======================
@@ -1263,6 +1399,11 @@ end
 
 local function SetMenuMinimized(minimized)
     State.Minimized = minimized
+
+    if not minimized and State.RecenterOnOpen then
+        MainFrame.Position = UDim2.fromScale(0.5, 0.5)
+    end
+
     MainFrame.Visible = not minimized
     OpenMenuCanvas.Visible = minimized
 end
@@ -1275,6 +1416,52 @@ Track(OpenMenuButton.MouseButton1Click:Connect(function()
     SetMenuMinimized(false)
 end))
 
+Track(MainTabButton.MouseButton1Click:Connect(function()
+    SetActiveTab("Main")
+end))
+
+Track(SettingsTabButton.MouseButton1Click:Connect(function()
+    SetActiveTab("Settings")
+end))
+
+Track(RecenterToggle.MouseButton1Click:Connect(function()
+    State.RecenterOnOpen = not State.RecenterOnOpen
+    SetToggleVisual(
+        RecenterToggle,
+        State.RecenterOnOpen,
+        "ON",
+        "OFF"
+    )
+end))
+
+Track(LockToggle.MouseButton1Click:Connect(function()
+    State.LockWindow = not State.LockWindow
+    SetToggleVisual(
+        LockToggle,
+        State.LockWindow,
+        "ON",
+        "OFF"
+    )
+end))
+
+Track(CenterNowButton.MouseButton1Click:Connect(function()
+    MainFrame.Position = UDim2.fromScale(0.5, 0.5)
+end))
+
+Track(ResetSettingsButton.MouseButton1Click:Connect(function()
+    State.RecenterOnOpen = true
+    State.LockWindow = false
+
+    SetToggleVisual(RecenterToggle, true, "ON", "OFF")
+    SetToggleVisual(LockToggle, false, "ON", "OFF")
+
+    SetOpacitySlider(1, true)
+    SetScaleSlider(1, true)
+    SetSideHeightSlider(0.30, true)
+
+    MainFrame.Position = UDim2.fromScale(0.5, 0.5)
+end))
+
 local function Cleanup()
     if State.Closed then
         return
@@ -1283,7 +1470,6 @@ local function Cleanup()
     State.Closed = true
     State.TeleportContinuous = false
 
-    StopGhostView()
     StopSpin()
     StopFly()
     RestoreMovementValues()
@@ -1392,7 +1578,6 @@ Track(FlyToggle.MouseButton1Click:Connect(function()
 end))
 
 Track(SpinToggle.MouseButton1Click:Connect(ClientFling))
-Track(GhostToggle.MouseButton1Click:Connect(ToggleGhostView))
 
 Track(NoclipToggle.MouseButton1Click:Connect(function()
     if State.SpinEnabled then
@@ -1512,55 +1697,6 @@ Track(RunService.Heartbeat:Connect(function(deltaTime)
     end
 end))
 
-Track(RunService.RenderStepped:Connect(function(deltaTime)
-    if not State.GhostViewEnabled then
-        return
-    end
-
-    local camera = Workspace.CurrentCamera
-
-    if not GhostPart or not GhostPart.Parent or not camera then
-        StopGhostView()
-        return
-    end
-
-    local cameraCFrame = camera.CFrame
-    local direction = Vector3.zero
-
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-        direction += cameraCFrame.LookVector
-    end
-
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-        direction -= cameraCFrame.LookVector
-    end
-
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-        direction -= cameraCFrame.RightVector
-    end
-
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-        direction += cameraCFrame.RightVector
-    end
-
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space)
-        or UserInputService:IsKeyDown(Enum.KeyCode.E) then
-        direction += Vector3.new(0, 1, 0)
-    end
-
-    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-        or UserInputService:IsKeyDown(Enum.KeyCode.Q) then
-        direction -= Vector3.new(0, 1, 0)
-    end
-
-    if direction.Magnitude > 0.001 then
-        GhostPart.Position +=
-            direction.Unit
-            * GHOST_MOVE_SPEED
-            * deltaTime
-    end
-end))
-
 Track(RunService.RenderStepped:Connect(function()
     if not State.FlyEnabled then
         return
@@ -1677,7 +1813,6 @@ Track(Players.PlayerRemoving:Connect(function(player)
 end))
 
 Track(LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-    StopGhostView()
     StopSpin()
     RestoreNoclip()
     StopFly()
@@ -1743,16 +1878,9 @@ SpeedBox.Text = tostring(DefaultWalkSpeed)
 JumpBox.Text = tostring(DefaultJumpPower)
 FlySpeedBox.Text = tostring(State.FlySpeedValue)
 
-SetToggleVisual(
-    GhostToggle,
-    false,
-    "Vue locale ON",
-    "Vue locale OFF"
-)
-
 UpdateDistanceDisplay(0)
 RefreshPlayerList("")
 RefreshESP()
 BindViewportResize()
 
-print("Menu Roblox chargé avec fling et vue locale.")
+print("Menu Roblox chargé avec paramètres et effet fling visuel.")
