@@ -44,6 +44,10 @@ local State = {
 
     FlyEnabled = false,
     FlySpeedValue = 55,
+
+    -- Rotation rapide locale et sans collision.
+    SpinEnabled = false,
+
     NoclipEnabled = false,
     GodEnabled = false,
     ESPEnabled = false,
@@ -67,6 +71,11 @@ local DefaultJumpHeight = 7.2
 
 local FlyBodyVelocity = nil
 local FlyBodyGyro = nil
+
+local SpinOriginalAutoRotate = true
+local SpinOriginalAnchored = false
+local SpinCollisionStates = {}
+local SPIN_SPEED_RADIANS = math.rad(1800)
 
 -- Deux pressions distinctes sur le bouton de saut activent/désactivent le vol.
 -- Le délai minimum empêche un appui maintenu d'être compté deux fois.
@@ -178,15 +187,21 @@ local function CreateTextBox(parent, text, placeholder, widthScale)
 end
 
 local function CreateSection(parent, titleText, height)
-    local section = Instance.new("CanvasGroup")
+    local section = Instance.new("ScrollingFrame")
     section.Size = UDim2.new(1, 0, 0, height)
     section.BackgroundColor3 = COLORS.Panel
     section.BorderSizePixel = 0
     section.ClipsDescendants = true
-    section.GroupTransparency = 0
+    section.CanvasSize = UDim2.fromOffset(0, 0)
+    section.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    section.ScrollingDirection = Enum.ScrollingDirection.Y
+    section.ScrollBarThickness = 4
+    section.ScrollBarImageColor3 = COLORS.Border
+    section.ScrollBarImageTransparency = 0.15
+    section.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
     section.Parent = parent
     AddCorner(section, 14)
-    AddPadding(section, 10, 10, 8, 8)
+    AddPadding(section, 10, 14, 8, 8)
 
     local layout = AddListLayout(section, Enum.FillDirection.Vertical, 6)
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
@@ -417,13 +432,13 @@ AddPadding(Content, 8, 8, 8, 8)
 local ContentLayout = AddListLayout(Content, Enum.FillDirection.Vertical, 6)
 ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
---==================== Section déplacement =========
+--==================== Réglages des valeurs ========
 
-local MovementSection = CreateSection(Content, "Déplacement", 142)
+local MovementSection = CreateSection(Content, "Réglages des valeurs", 168)
 
 local SpeedRow = CreateRow(MovementSection, 34, 6)
 
-local SpeedLabel = CreateLabel(SpeedRow, "Vitesse", 34)
+local SpeedLabel = CreateLabel(SpeedRow, "Vitesse au sol", 34)
 SpeedLabel.Size = UDim2.new(0.40, 0, 1, 0)
 
 local SpeedBox = CreateTextBox(SpeedRow, "16", "Valeur", 0.23)
@@ -439,18 +454,19 @@ local JumpToggle = CreateButton(JumpRow, "OFF", 0.27)
 
 local FlySpeedRow = CreateRow(MovementSection, 34, 6)
 
-local FlySpeedLabel = CreateLabel(FlySpeedRow, "Vitesse du vol", 34)
+local FlySpeedLabel = CreateLabel(FlySpeedRow, "Vitesse de vol", 34)
 FlySpeedLabel.Size = UDim2.new(0.58, 0, 1, 0)
 
 local FlySpeedBox = CreateTextBox(FlySpeedRow, "55", "Valeur", 0.34)
 
---==================== Section fonctions ===========
+--==================== Fonctions du personnage =====
 
-local PowersSection = CreateSection(Content, "Fonctions", 108)
+local PowersSection = CreateSection(Content, "Fonctions du personnage", 152)
 
 local PowersGridHolder = Instance.new("Frame")
-PowersGridHolder.Size = UDim2.new(1, 0, 0, 70)
+PowersGridHolder.Size = UDim2.new(1, 0, 0, 108)
 PowersGridHolder.BackgroundTransparency = 1
+PowersGridHolder.ClipsDescendants = true
 PowersGridHolder.Parent = PowersSection
 
 local PowersGrid = Instance.new("UIGridLayout")
@@ -464,10 +480,11 @@ local FlyToggle = CreateButton(PowersGridHolder, "Vol OFF", 1)
 local NoclipToggle = CreateButton(PowersGridHolder, "Noclip OFF", 1)
 local GodToggle = CreateButton(PowersGridHolder, "God OFF", 1)
 local ESPToggle = CreateButton(PowersGridHolder, "ESP OFF", 1)
+local SpinToggle = CreateButton(PowersGridHolder, "Rotation OFF", 1)
 
---==================== Section téléportation =======
+--==================== Joueurs et téléportation =====
 
-local TeleportSection = CreateSection(Content, "Téléportation", 270)
+local TeleportSection = CreateSection(Content, "Joueurs et téléportation", 280)
 
 local SearchRow = CreateRow(TeleportSection, 34, 6)
 
@@ -696,6 +713,87 @@ local function RestoreMovementValues()
     humanoid.UseJumpPower = DefaultUseJumpPower
     humanoid.JumpPower = DefaultJumpPower
     humanoid.JumpHeight = DefaultJumpHeight
+end
+
+--==================== Rotation rapide =============
+
+local function RestoreSpinCollisions()
+    if State.NoclipEnabled then
+        table.clear(SpinCollisionStates)
+        return
+    end
+
+    for part, oldCanCollide in pairs(SpinCollisionStates) do
+        if part and part.Parent then
+            part.CanCollide = oldCanCollide
+        end
+    end
+
+    table.clear(SpinCollisionStates)
+end
+
+local function StopSpin()
+    if not State.SpinEnabled then
+        SetToggleVisual(SpinToggle, false, "Rotation ON", "Rotation OFF")
+        return
+    end
+
+    State.SpinEnabled = false
+
+    local _, humanoid, root = GetCharacterParts()
+
+    if root then
+        root.Anchored = SpinOriginalAnchored
+    end
+
+    if humanoid then
+        humanoid.AutoRotate = SpinOriginalAutoRotate
+    end
+
+    RestoreSpinCollisions()
+    SetToggleVisual(SpinToggle, false, "Rotation ON", "Rotation OFF")
+end
+
+local function StartSpin()
+    local character, humanoid, root = GetCharacterParts()
+
+    if not character or not humanoid or not root then
+        return
+    end
+
+    -- Le vol et la rotation rapide utilisent tous les deux l'orientation
+    -- du personnage. On coupe donc proprement le vol avant la rotation.
+    if State.FlyEnabled then
+        StopFly()
+    end
+
+    SpinOriginalAutoRotate = humanoid.AutoRotate
+    SpinOriginalAnchored = root.Anchored
+
+    table.clear(SpinCollisionStates)
+
+    -- Désactive les collisions pendant la rotation afin que cette fonction
+    -- reste un effet local sur ton propre personnage.
+    for _, object in ipairs(character:GetDescendants()) do
+        if object:IsA("BasePart") then
+            SpinCollisionStates[object] = object.CanCollide
+            object.CanCollide = false
+        end
+    end
+
+    State.SpinEnabled = true
+    humanoid.AutoRotate = false
+    root.Anchored = true
+
+    SetToggleVisual(SpinToggle, true, "Rotation ON", "Rotation OFF")
+end
+
+local function ToggleSpin()
+    if State.SpinEnabled then
+        StopSpin()
+    else
+        StartSpin()
+    end
 end
 
 --==================== Noclip ======================
@@ -1037,6 +1135,7 @@ local function Cleanup()
     State.Closed = true
     State.TeleportContinuous = false
 
+    StopSpin()
     StopFly()
     RestoreMovementValues()
     RestoreNoclip()
@@ -1135,9 +1234,21 @@ Track(FlySpeedBox.FocusLost:Connect(function()
     FlySpeedBox.Text = tostring(State.FlySpeedValue)
 end))
 
-Track(FlyToggle.MouseButton1Click:Connect(ToggleFly))
+Track(FlyToggle.MouseButton1Click:Connect(function()
+    if State.SpinEnabled then
+        StopSpin()
+    end
+
+    ToggleFly()
+end))
+
+Track(SpinToggle.MouseButton1Click:Connect(ToggleSpin))
 
 Track(NoclipToggle.MouseButton1Click:Connect(function()
+    if State.SpinEnabled then
+        StopSpin()
+    end
+
     SetNoclip(not State.NoclipEnabled)
 end))
 
@@ -1196,6 +1307,10 @@ Track(UserInputService.JumpRequest:Connect(function()
     if LastJumpTap > 0
         and timeSincePreviousTap >= DoubleJumpMinGap
         and timeSincePreviousTap <= DoubleJumpMaxGap then
+        if State.SpinEnabled then
+            StopSpin()
+        end
+
         ToggleFly()
         LastJumpTap = 0
         return
@@ -1245,6 +1360,25 @@ Track(RunService.Heartbeat:Connect(function(deltaTime)
     else
         TeleportTimer = 0
     end
+end))
+
+Track(RunService.RenderStepped:Connect(function(deltaTime)
+    if not State.SpinEnabled then
+        return
+    end
+
+    local _, humanoid, root = GetCharacterParts()
+
+    if not humanoid or not root then
+        StopSpin()
+        return
+    end
+
+    root.CFrame = root.CFrame * CFrame.Angles(
+        0,
+        SPIN_SPEED_RADIANS * deltaTime,
+        0
+    )
 end))
 
 Track(RunService.RenderStepped:Connect(function()
@@ -1363,6 +1497,7 @@ Track(Players.PlayerRemoving:Connect(function(player)
 end))
 
 Track(LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    StopSpin()
     RestoreNoclip()
     StopFly()
 
@@ -1432,4 +1567,4 @@ RefreshPlayerList("")
 RefreshESP()
 BindViewportResize()
 
-print("Menu Roblox chargé avec bouton latéral vert et CanvasGroup.")
+print("Menu Roblox chargé avec ScrollFrames et rotation rapide locale.")
