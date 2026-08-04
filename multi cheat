@@ -26,12 +26,6 @@ local Scripts = {
         PlaceIds = {1537690962}
     },
     {
-        Name = "Zach's Station Service",
-        Url = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/ZSS%20Autofarm.lua",
-        requirePlaceId = false,
-        PlaceIds = {}
-    },
-    {
         Name = "Lumber Tycoon 2",
         Url = "https://raw.githubusercontent.com/DevKron/Kron_Hub/refs/heads/main/version_1.0",
         requirePlaceId = true,
