@@ -72,10 +72,14 @@ local DefaultJumpHeight = 7.2
 local FlyBodyVelocity = nil
 local FlyBodyGyro = nil
 
-local SpinOriginalAutoRotate = true
-local SpinOriginalAnchored = false
-local SpinCollisionStates = {}
-local SPIN_SPEED_RADIANS = math.rad(1800)
+-- La rotation agit uniquement sur l'articulation visuelle du personnage.
+-- La hitbox principale reste libre : le joueur peut continuer à marcher.
+local SpinMotor = nil
+local SpinOriginalC0 = nil
+local SpinAngle = 0
+
+-- 5 400 degrés par seconde = 15 tours complets par seconde.
+local SPIN_SPEED_RADIANS = math.rad(5400)
 
 -- Deux pressions distinctes sur le bouton de saut activent/désactivent le vol.
 -- Le délai minimum empêche un appui maintenu d'être compté deux fois.
@@ -717,74 +721,62 @@ end
 
 --==================== Rotation rapide =============
 
-local function RestoreSpinCollisions()
-    if State.NoclipEnabled then
-        table.clear(SpinCollisionStates)
-        return
+local function FindSpinMotor(character, root)
+    if not character or not root then
+        return nil
     end
 
-    for part, oldCanCollide in pairs(SpinCollisionStates) do
-        if part and part.Parent then
-            part.CanCollide = oldCanCollide
+    -- Compatible R6 et R15.
+    for _, object in ipairs(character:GetDescendants()) do
+        if object:IsA("Motor6D")
+            and object.Part0 == root
+            and (object.Name == "Root" or object.Name == "RootJoint") then
+            return object
         end
     end
 
-    table.clear(SpinCollisionStates)
+    -- Solution de secours si le moteur porte un autre nom.
+    for _, object in ipairs(character:GetDescendants()) do
+        if object:IsA("Motor6D") and object.Part0 == root then
+            return object
+        end
+    end
+
+    return nil
 end
 
 local function StopSpin()
-    if not State.SpinEnabled then
-        SetToggleVisual(SpinToggle, false, "Rotation ON", "Rotation OFF")
-        return
+    if SpinMotor and SpinMotor.Parent and SpinOriginalC0 then
+        SpinMotor.C0 = SpinOriginalC0
     end
 
     State.SpinEnabled = false
+    SpinMotor = nil
+    SpinOriginalC0 = nil
+    SpinAngle = 0
 
-    local _, humanoid, root = GetCharacterParts()
-
-    if root then
-        root.Anchored = SpinOriginalAnchored
-    end
-
-    if humanoid then
-        humanoid.AutoRotate = SpinOriginalAutoRotate
-    end
-
-    RestoreSpinCollisions()
     SetToggleVisual(SpinToggle, false, "Rotation ON", "Rotation OFF")
 end
 
 local function StartSpin()
-    local character, humanoid, root = GetCharacterParts()
+    local character, _, root = GetCharacterParts()
 
-    if not character or not humanoid or not root then
+    if not character or not root then
         return
     end
 
-    -- Le vol et la rotation rapide utilisent tous les deux l'orientation
-    -- du personnage. On coupe donc proprement le vol avant la rotation.
-    if State.FlyEnabled then
-        StopFly()
+    SpinMotor = FindSpinMotor(character, root)
+
+    if not SpinMotor then
+        warn("Articulation principale du personnage introuvable.")
+        return
     end
 
-    SpinOriginalAutoRotate = humanoid.AutoRotate
-    SpinOriginalAnchored = root.Anchored
-
-    table.clear(SpinCollisionStates)
-
-    -- Désactive les collisions pendant la rotation afin que cette fonction
-    -- reste un effet local sur ton propre personnage.
-    for _, object in ipairs(character:GetDescendants()) do
-        if object:IsA("BasePart") then
-            SpinCollisionStates[object] = object.CanCollide
-            object.CanCollide = false
-        end
-    end
-
+    SpinOriginalC0 = SpinMotor.C0
+    SpinAngle = 0
     State.SpinEnabled = true
-    humanoid.AutoRotate = false
-    root.Anchored = true
 
+    -- Le joueur reste non ancré et garde ses collisions normales.
     SetToggleVisual(SpinToggle, true, "Rotation ON", "Rotation OFF")
 end
 
@@ -1367,18 +1359,28 @@ Track(RunService.RenderStepped:Connect(function(deltaTime)
         return
     end
 
-    local _, humanoid, root = GetCharacterParts()
+    local character, _, root = GetCharacterParts()
 
-    if not humanoid or not root then
+    if not character or not root then
         StopSpin()
         return
     end
 
-    root.CFrame = root.CFrame * CFrame.Angles(
-        0,
-        SPIN_SPEED_RADIANS * deltaTime,
-        0
-    )
+    if not SpinMotor or not SpinMotor.Parent then
+        SpinMotor = FindSpinMotor(character, root)
+
+        if not SpinMotor then
+            StopSpin()
+            return
+        end
+
+        SpinOriginalC0 = SpinMotor.C0
+    end
+
+    SpinAngle = (SpinAngle + SPIN_SPEED_RADIANS * deltaTime) % (math.pi * 2)
+
+    -- Tourne le corps visuellement sans bloquer les déplacements du Humanoid.
+    SpinMotor.C0 = SpinOriginalC0 * CFrame.Angles(0, SpinAngle, 0)
 end))
 
 Track(RunService.RenderStepped:Connect(function()
@@ -1567,4 +1569,4 @@ RefreshPlayerList("")
 RefreshESP()
 BindViewportResize()
 
-print("Menu Roblox chargé avec ScrollFrames et rotation rapide locale.")
+print("Menu Roblox chargé avec rotation visuelle rapide et déplacement conservé.")
