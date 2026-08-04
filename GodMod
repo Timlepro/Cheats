@@ -1,470 +1,378 @@
---[[
-    Script Local Complet - Toutes fonctionnalités
-    Interface en français, fenêtre déplaçable avec réduction et fermeture.
-]]
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 local TweenService = game:GetService("TweenService")
+local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 
--- Variables d'état
-local flyEnabled = false
-local flyBodyVelocity = nil
-local lastJumpTime = 0
-local doubleJumpThreshold = 0.3
-
-local speedToggle = false
-local speedValue = 16
-local jumpToggle = false
-local jumpValue = 50
-local noclipToggle = false
-local espToggle = false
-local teleportTarget = ""
-local teleportOnce = false
-local teleportContinuous = false
-local teleportConnection = nil
+-- ==================== ÉTATS ====================
+local state = {
+    fly = false,
+    speedToggle = false,
+    speedValue = 16,
+    jumpToggle = false,
+    jumpValue = 50,
+    noclipToggle = false,
+    espToggle = false,
+    godMode = false,
+    teleportContinuous = false,
+    teleportTarget = "",
+}
 
 -- Variables pour le vol
+local flyBodyVelocity = nil
 local flySpeed = 50
-local flyDirection = Vector3.new(0,0,0)
-local flyUp = false
-local flyDown = false
+local lastJumpTime = 0
+local doubleJumpThreshold = 0.3
+local teleportConnection = nil
+local espData = {highlights = {}, billboards = {}}
 
--- Création de l'interface
+-- ==================== FONCTIONS UTILITAIRES ====================
+local function getCharacter()
+    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    Humanoid = Character:WaitForChild("Humanoid")
+    return Character, Humanoid
+end
+
+local function getTorso()
+    local char = getCharacter()
+    return char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+end
+
+-- ==================== CRÉATION DE L'UI ====================
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MenuGUI"
+screenGui.Name = "HackMenu"
 screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 320, 0, 440)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -220)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.BackgroundTransparency = 0.1
+mainFrame.Size = UDim2.new(0, 260, 0, 380)  -- Plus compact
+mainFrame.Position = UDim2.new(0.5, -130, 0.5, -190)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+mainFrame.BackgroundTransparency = 0.15
 mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 
--- Titre + boutons réduire/fermer
+-- Coins arrondis (avec une propriété UIGradient ou simplement en ajoutant un UICorner)
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Barre de titre
 local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 30)
-titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+titleBar.Size = UDim2.new(1, 0, 0, 28)
+titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 titleBar.BorderSizePixel = 0
 titleBar.Parent = mainFrame
+local cornerTitle = Instance.new("UICorner")
+cornerTitle.CornerRadius = UDim.new(0, 8)
+cornerTitle.Parent = titleBar
 
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+titleLabel.Size = UDim2.new(0.6, 0, 1, 0)
 titleLabel.Position = UDim2.new(0.05, 0, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Menu Principal"
+titleLabel.Text = "◈ Menu Ultime"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 16
+titleLabel.TextSize = 14
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.Parent = titleBar
 
-local minimizeButton = Instance.new("TextButton")
-minimizeButton.Size = UDim2.new(0, 30, 1, 0)
-minimizeButton.Position = UDim2.new(1, -60, 0, 0)
-minimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-minimizeButton.Text = "-"
-minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-minimizeButton.TextSize = 20
-minimizeButton.Font = Enum.Font.GothamBold
-minimizeButton.BorderSizePixel = 0
-minimizeButton.Parent = titleBar
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 28, 1, 0)
+minimizeBtn.Position = UDim2.new(1, -56, 0, 0)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+minimizeBtn.Text = "─"
+minimizeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+minimizeBtn.TextSize = 18
+minimizeBtn.Font = Enum.Font.Gotham
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Parent = titleBar
 
-local closeButton = Instance.new("TextButton")
-closeButton.Size = UDim2.new(0, 30, 1, 0)
-closeButton.Position = UDim2.new(1, -30, 0, 0)
-closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeButton.Text = "X"
-closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.TextSize = 20
-closeButton.Font = Enum.Font.GothamBold
-closeButton.BorderSizePixel = 0
-closeButton.Parent = titleBar
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 1, 0)
+closeBtn.Position = UDim2.new(1, -28, 0, 0)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+closeBtn.TextSize = 16
+closeBtn.Font = Enum.Font.Gotham
+closeBtn.BorderSizePixel = 0
+closeBtn.Parent = titleBar
 
 -- Contenu (ScrollingFrame)
 local content = Instance.new("ScrollingFrame")
-content.Size = UDim2.new(1, 0, 1, -30)
-content.Position = UDim2.new(0, 0, 0, 30)
+content.Size = UDim2.new(1, 0, 1, -28)
+content.Position = UDim2.new(0, 0, 0, 28)
 content.BackgroundTransparency = 1
 content.BorderSizePixel = 0
-content.CanvasSize = UDim2.new(0, 0, 0, 500)
-content.ScrollBarThickness = 8
+content.CanvasSize = UDim2.new(0, 0, 0, 420)
+content.ScrollBarThickness = 6
 content.Parent = mainFrame
 
-local function createLabel(text, parent)
+-- Fonction pour créer un groupe avec titre
+local function createGroup(title, yPos, height)
+    local group = Instance.new("Frame")
+    group.Size = UDim2.new(1, -10, 0, height)
+    group.Position = UDim2.new(0, 5, 0, yPos)
+    group.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    group.BackgroundTransparency = 0.3
+    group.BorderSizePixel = 0
+    group.Parent = content
+    local grpCorner = Instance.new("UICorner")
+    grpCorner.CornerRadius = UDim.new(0, 5)
+    grpCorner.Parent = group
+
     local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -10, 0, 20)
-    lbl.Position = UDim2.new(0, 5, 0, 0)
+    lbl.Size = UDim2.new(1, 0, 0, 18)
+    lbl.Position = UDim2.new(0, 5, 0, 2)
     lbl.BackgroundTransparency = 1
-    lbl.Text = text
-    lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-    lbl.TextSize = 14
+    lbl.Text = title
+    lbl.TextColor3 = Color3.fromRGB(200, 200, 220)
+    lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Font = Enum.Font.Gotham
-    lbl.Parent = parent
-    return lbl
+    lbl.Font = Enum.Font.GothamBold
+    lbl.Parent = group
+    return group
 end
 
-local function createTextBox(placeholder, parent, yPos)
+-- Fonction pour créer un champ texte + toggle
+local function createInputRow(group, labelText, placeholder, yOffset, callback)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -10, 0, 24)
+    row.Position = UDim2.new(0, 5, 0, yOffset)
+    row.BackgroundTransparency = 1
+    row.Parent = group
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0.4, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = labelText
+    lbl.TextColor3 = Color3.fromRGB(220,220,220)
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Font = Enum.Font.Gotham
+    lbl.Parent = row
+
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(0.4, 0, 0, 24)
-    box.Position = UDim2.new(0.5, 10, 0, yPos)
-    box.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.Size = UDim2.new(0.25, 0, 1, 0)
+    box.Position = UDim2.new(0.4, 0, 0, 0)
+    box.BackgroundColor3 = Color3.fromRGB(50,50,55)
+    box.TextColor3 = Color3.fromRGB(255,255,255)
     box.PlaceholderText = placeholder
     box.Text = ""
     box.Font = Enum.Font.Gotham
-    box.TextSize = 14
+    box.TextSize = 12
     box.BorderSizePixel = 0
-    box.Parent = parent
-    return box
+    box.Parent = row
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 4)
+    boxCorner.Parent = box
+
+    local toggle = Instance.new("TextButton")
+    toggle.Size = UDim2.new(0.25, 0, 1, 0)
+    toggle.Position = UDim2.new(0.7, 0, 0, 0)
+    toggle.BackgroundColor3 = Color3.fromRGB(60,60,70)
+    toggle.Text = "OFF"
+    toggle.TextColor3 = Color3.fromRGB(200,200,200)
+    toggle.Font = Enum.Font.Gotham
+    toggle.TextSize = 11
+    toggle.BorderSizePixel = 0
+    toggle.Parent = row
+    local togCorner = Instance.new("UICorner")
+    togCorner.CornerRadius = UDim.new(0, 4)
+    togCorner.Parent = toggle
+
+    local stateVar = false
+    toggle.MouseButton1Click:Connect(function()
+        stateVar = not stateVar
+        toggle.Text = stateVar and "ON" or "OFF"
+        toggle.BackgroundColor3 = stateVar and Color3.fromRGB(70, 170, 70) or Color3.fromRGB(60,60,70)
+        if callback then callback(stateVar, box) end
+    end)
+
+    box.FocusLost:Connect(function()
+        if callback then callback(stateVar, box) end
+    end)
+
+    return {box = box, toggle = toggle, getState = function() return stateVar end}
 end
 
-local function createToggleButton(text, parent, yPos)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.35, 0, 0, 24)
-    btn.Position = UDim2.new(0.85, -10, 0, yPos)
-    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 14
-    btn.BorderSizePixel = 0
-    btn.Parent = parent
-    return btn
+-- Fonction pour créer un simple toggle
+local function createToggle(group, labelText, yOffset, callback)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -10, 0, 24)
+    row.Position = UDim2.new(0, 5, 0, yOffset)
+    row.BackgroundTransparency = 1
+    row.Parent = group
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0.6, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = labelText
+    lbl.TextColor3 = Color3.fromRGB(220,220,220)
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Font = Enum.Font.Gotham
+    lbl.Parent = row
+
+    local toggle = Instance.new("TextButton")
+    toggle.Size = UDim2.new(0.25, 0, 1, 0)
+    toggle.Position = UDim2.new(0.7, 0, 0, 0)
+    toggle.BackgroundColor3 = Color3.fromRGB(60,60,70)
+    toggle.Text = "OFF"
+    toggle.TextColor3 = Color3.fromRGB(200,200,200)
+    toggle.Font = Enum.Font.Gotham
+    toggle.TextSize = 11
+    toggle.BorderSizePixel = 0
+    toggle.Parent = row
+    local togCorner = Instance.new("UICorner")
+    togCorner.CornerRadius = UDim.new(0, 4)
+    togCorner.Parent = toggle
+
+    local stateVar = false
+    toggle.MouseButton1Click:Connect(function()
+        stateVar = not stateVar
+        toggle.Text = stateVar and "ON" or "OFF"
+        toggle.BackgroundColor3 = stateVar and Color3.fromRGB(70, 170, 70) or Color3.fromRGB(60,60,70)
+        if callback then callback(stateVar) end
+    end)
+    return {toggle = toggle, getState = function() return stateVar end}
 end
 
--- 1. Vitesse
-local speedSection = Instance.new("Frame")
-speedSection.Size = UDim2.new(1, 0, 0, 40)
-speedSection.BackgroundTransparency = 1
-speedSection.Parent = content
+-- Construction de l'UI
+local y = 5
 
-createLabel("Vitesse de marche :", speedSection)
-local speedBox = createTextBox("16", speedSection, 10)
-local speedToggleBtn = createToggleButton("Désactivé", speedSection, 10)
-
--- 2. Hauteur de saut
-local jumpSection = Instance.new("Frame")
-jumpSection.Size = UDim2.new(1, 0, 0, 40)
-jumpSection.Position = UDim2.new(0, 0, 0, 40)
-jumpSection.BackgroundTransparency = 1
-jumpSection.Parent = content
-
-createLabel("Hauteur de saut :", jumpSection)
-local jumpBox = createTextBox("50", jumpSection, 10)
-local jumpToggleBtn = createToggleButton("Désactivé", jumpSection, 10)
-
--- 3. Noclip
-local noclipSection = Instance.new("Frame")
-noclipSection.Size = UDim2.new(1, 0, 0, 30)
-noclipSection.Position = UDim2.new(0, 0, 0, 80)
-noclipSection.BackgroundTransparency = 1
-noclipSection.Parent = content
-
-createLabel("Noclip :", noclipSection)
-local noclipToggleBtn = createToggleButton("Désactivé", noclipSection, 0)
-
--- 4. Téléportation
-local teleportSection = Instance.new("Frame")
-teleportSection.Size = UDim2.new(1, 0, 0, 80)
-teleportSection.Position = UDim2.new(0, 0, 0, 120)
-teleportSection.BackgroundTransparency = 1
-teleportSection.Parent = content
-
-createLabel("Téléportation", teleportSection)
-local targetLabel = Instance.new("TextLabel")
-targetLabel.Size = UDim2.new(0.4, 0, 0, 20)
-targetLabel.Position = UDim2.new(0, 5, 0, 25)
-targetLabel.BackgroundTransparency = 1
-targetLabel.Text = "Joueur cible :"
-targetLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-targetLabel.TextSize = 14
-targetLabel.TextXAlignment = Enum.TextXAlignment.Left
-targetLabel.Font = Enum.Font.Gotham
-targetLabel.Parent = teleportSection
-
-local targetBox = Instance.new("TextBox")
-targetBox.Size = UDim2.new(0.4, 0, 0, 24)
-targetBox.Position = UDim2.new(0.5, 0, 0, 25)
-targetBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-targetBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-targetBox.PlaceholderText = "Nom du joueur"
-targetBox.Text = ""
-targetBox.Font = Enum.Font.Gotham
-targetBox.TextSize = 14
-targetBox.BorderSizePixel = 0
-targetBox.Parent = teleportSection
-
-local teleportOnceBtn = Instance.new("TextButton")
-teleportOnceBtn.Size = UDim2.new(0.4, 0, 0, 24)
-teleportOnceBtn.Position = UDim2.new(0.05, 0, 0, 55)
-teleportOnceBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 200)
-teleportOnceBtn.Text = "Téléporter une fois"
-teleportOnceBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-teleportOnceBtn.Font = Enum.Font.Gotham
-teleportOnceBtn.TextSize = 13
-teleportOnceBtn.BorderSizePixel = 0
-teleportOnceBtn.Parent = teleportSection
-
-local teleportContBtn = createToggleButton("Désactivé", teleportSection, 55)
-teleportContBtn.Size = UDim2.new(0.4, 0, 0, 24)
-teleportContBtn.Position = UDim2.new(0.55, 0, 0, 55)
-teleportContBtn.Text = "Désactivé"
-
--- 5. ESP
-local espSection = Instance.new("Frame")
-espSection.Size = UDim2.new(1, 0, 0, 30)
-espSection.Position = UDim2.new(0, 0, 0, 210)
-espSection.BackgroundTransparency = 1
-espSection.Parent = content
-
-createLabel("ESP :", espSection)
-local espToggleBtn = createToggleButton("Désactivé", espSection, 0)
-
--- Ajuster la taille du canvas
-content.CanvasSize = UDim2.new(0, 0, 0, 250)
-
--- Gestion du vol (double saut)
-local function toggleFly()
-    flyEnabled = not flyEnabled
-    if flyEnabled then
-        -- Créer un BodyVelocity dans le torse
-        local torso = Character:FindFirstChild("Torso") or Character:FindFirstChild("UpperTorso")
-        if torso then
-            flyBodyVelocity = Instance.new("BodyVelocity")
-            flyBodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-            flyBodyVelocity.Velocity = Vector3.new(0, flySpeed, 0)
-            flyBodyVelocity.Parent = torso
-        end
-        -- Désactiver la gravité
-        Humanoid.PlatformStand = true
-        Humanoid.Sit = false
+-- Groupe Speed
+local gSpeed = createGroup("⚡ Vitesse", y, 40)
+y = y + 45
+local speedRow = createInputRow(gSpeed, "Marche :", "16", 20, function(on, box)
+    state.speedToggle = on
+    if on then
+        local val = tonumber(box.Text) or 16
+        state.speedValue = val
+        Humanoid.WalkSpeed = val
     else
-        if flyBodyVelocity then
-            flyBodyVelocity:Destroy()
-            flyBodyVelocity = nil
-        end
-        Humanoid.PlatformStand = false
-        Humanoid.Sit = false
-    end
-end
-
--- Détection double saut
-local function onJump()
-    local currentTime = tick()
-    if currentTime - lastJumpTime < doubleJumpThreshold then
-        toggleFly()
-    end
-    lastJumpTime = currentTime
-end
-
--- Attendre que le joueur ait un Humanoid
-local function setupJumpListener()
-    if Humanoid then
-        Humanoid.Jump:Connect(onJump)
-    end
-end
-
-setupJumpListener()
-LocalPlayer.CharacterAdded:Connect(function(newChar)
-    Character = newChar
-    Humanoid = Character:WaitForChild("Humanoid")
-    setupJumpListener()
-    -- réinitialiser le vol si actif
-    if flyEnabled then
-        flyEnabled = false
-        if flyBodyVelocity then
-            flyBodyVelocity:Destroy()
-            flyBodyVelocity = nil
-        end
-        Humanoid.PlatformStand = false
+        Humanoid.WalkSpeed = 16
     end
 end)
 
--- Gestion du vol avec touches
-local function updateFlyVelocity()
-    if not flyEnabled then return end
-    local torso = Character:FindFirstChild("Torso") or Character:FindFirstChild("UpperTorso")
-    if not torso or not flyBodyVelocity then return end
-
-    local camera = workspace.CurrentCamera
-    local forward = camera.CFrame.LookVector * Vector3.new(1,0,1)
-    local right = camera.CFrame.RightVector * Vector3.new(1,0,1)
-    local up = Vector3.new(0,1,0)
-
-    local vel = Vector3.new(0,0,0)
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then vel = vel + forward
-    elseif UserInputService:IsKeyDown(Enum.KeyCode.S) then vel = vel - forward
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then vel = vel - right
-    elseif UserInputService:IsKeyDown(Enum.KeyCode.D) then vel = vel + right
-    end
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vel = vel + up
-    elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then vel = vel - up
-    end
-
-    if vel.Magnitude > 0 then
-        vel = vel.Unit * flySpeed
-    else
-        vel = Vector3.new(0, flySpeed, 0) -- monte par défaut
-    end
-
-    flyBodyVelocity.Velocity = vel
-end
-
--- Boucle pour vol et autres mises à jour
-RunService.Heartbeat:Connect(function()
-    if flyEnabled then
-        updateFlyVelocity()
-    end
-end)
-
--- Gestion vitesse
-local function applySpeed()
-    if speedToggle then
-        local value = tonumber(speedBox.Text)
-        if value and value > 0 then
-            speedValue = value
-            Humanoid.WalkSpeed = speedValue
-        end
-    end
-end
-
-speedBox.FocusLost:Connect(function()
-    applySpeed()
-end)
-
-speedToggleBtn.MouseButton1Click:Connect(function()
-    speedToggle = not speedToggle
-    speedToggleBtn.Text = speedToggle and "Activé" or "Désactivé"
-    if speedToggle then
-        applySpeed()
-    else
-        Humanoid.WalkSpeed = 16 -- valeur par défaut
-    end
-end)
-
--- Gestion hauteur de saut
-local function applyJump()
-    if jumpToggle then
-        local value = tonumber(jumpBox.Text)
-        if value and value > 0 then
-            jumpValue = value
-            Humanoid.JumpPower = jumpValue
-        end
-    end
-end
-
-jumpBox.FocusLost:Connect(function()
-    applyJump()
-end)
-
-jumpToggleBtn.MouseButton1Click:Connect(function()
-    jumpToggle = not jumpToggle
-    jumpToggleBtn.Text = jumpToggle and "Activé" or "Désactivé"
-    if jumpToggle then
-        applyJump()
+-- Groupe Jump
+local gJump = createGroup("🦘 Saut", y, 40)
+y = y + 45
+local jumpRow = createInputRow(gJump, "Hauteur :", "50", 20, function(on, box)
+    state.jumpToggle = on
+    if on then
+        local val = tonumber(box.Text) or 50
+        state.jumpValue = val
+        Humanoid.JumpPower = val
     else
         Humanoid.JumpPower = 50
     end
 end)
 
--- Noclip
-local function updateNoclip()
-    if not Character then return end
-    for _, part in ipairs(Character:GetDescendants()) do
+-- Groupe Noclip
+local gNoclip = createGroup("🚪 Noclip", y, 30)
+y = y + 35
+local noclipToggle = createToggle(gNoclip, "Traverser les murs", 5, function(on)
+    state.noclipToggle = on
+    local char, _ = getCharacter()
+    for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
-            part.CanCollide = not noclipToggle
+            part.CanCollide = not on
         end
     end
-end
-
-noclipToggleBtn.MouseButton1Click:Connect(function()
-    noclipToggle = not noclipToggle
-    noclipToggleBtn.Text = noclipToggle and "Activé" or "Désactivé"
-    updateNoclip()
 end)
 
--- Réappliquer noclip après respawn
-LocalPlayer.CharacterAdded:Connect(function(newChar)
-    Character = newChar
-    Humanoid = Character:WaitForChild("Humanoid")
-    setupJumpListener()
-    wait(0.5)
-    if noclipToggle then
-        updateNoclip()
-    end
-    if speedToggle then
-        applySpeed()
-    end
-    if jumpToggle then
-        applyJump()
-    end
+-- Groupe God
+local gGod = createGroup("🛡️ God Mode", y, 30)
+y = y + 35
+local godToggle = createToggle(gGod, "Invincible", 5, function(on)
+    state.godMode = on
 end)
 
--- Téléportation
-local function getTargetPlayer()
-    local name = targetBox.Text
-    if name == "" then return nil end
-    for _, player in ipairs(Players:GetPlayers()) do
-        if string.lower(player.Name) == string.lower(name) or string.lower(player.DisplayName) == string.lower(name) then
-            return player
-        end
-    end
-    return nil
-end
-
-local function teleportToPlayer(player)
-    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
-    local targetPos = player.Character.HumanoidRootPart.Position
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        char.HumanoidRootPart.CFrame = CFrame.new(targetPos)
-    end
-end
-
-teleportOnceBtn.MouseButton1Click:Connect(function()
-    local target = getTargetPlayer()
-    if target then
-        teleportToPlayer(target)
-    else
-        -- Notification simple
-        local notif = Instance.new("TextLabel")
-        notif.Size = UDim2.new(0, 200, 0, 30)
-        notif.Position = UDim2.new(0.5, -100, 0.8, 0)
-        notif.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        notif.Text = "Joueur introuvable !"
-        notif.TextColor3 = Color3.fromRGB(255,255,255)
-        notif.Font = Enum.Font.Gotham
-        notif.TextSize = 14
-        notif.Parent = screenGui
-        wait(1.5)
-        notif:Destroy()
-    end
+-- Groupe ESP
+local gESP = createGroup("👁️ ESP", y, 30)
+y = y + 35
+local espToggle = createToggle(gESP, "Afficher joueurs", 5, function(on)
+    state.espToggle = on
+    refreshESP()
 end)
 
-teleportContBtn.MouseButton1Click:Connect(function()
-    teleportContinuous = not teleportContinuous
-    teleportContBtn.Text = teleportContinuous and "Activé" or "Désactivé"
-    if teleportContinuous then
+-- Groupe Téléportation
+local gTeleport = createGroup("📍 Téléportation", y, 80)
+y = y + 85
+local teleportLabel = Instance.new("TextLabel")
+teleportLabel.Size = UDim2.new(0.3, 0, 0, 18)
+teleportLabel.Position = UDim2.new(0.05, 0, 0, 20)
+teleportLabel.BackgroundTransparency = 1
+teleportLabel.Text = "Cible :"
+teleportLabel.TextColor3 = Color3.fromRGB(200,200,200)
+teleportLabel.TextSize = 11
+teleportLabel.TextXAlignment = Enum.TextXAlignment.Left
+teleportLabel.Font = Enum.Font.Gotham
+teleportLabel.Parent = gTeleport
+
+local targetBox = Instance.new("TextBox")
+targetBox.Size = UDim2.new(0.4, 0, 0, 20)
+targetBox.Position = UDim2.new(0.35, 0, 0, 20)
+targetBox.BackgroundColor3 = Color3.fromRGB(50,50,55)
+targetBox.TextColor3 = Color3.fromRGB(255,255,255)
+targetBox.PlaceholderText = "Nom joueur"
+targetBox.Text = ""
+targetBox.Font = Enum.Font.Gotham
+targetBox.TextSize = 11
+targetBox.BorderSizePixel = 0
+targetBox.Parent = gTeleport
+local boxCorner2 = Instance.new("UICorner")
+boxCorner2.CornerRadius = UDim.new(0, 4)
+boxCorner2.Parent = targetBox
+
+local teleportOnce = Instance.new("TextButton")
+teleportOnce.Size = UDim2.new(0.4, 0, 0, 20)
+teleportOnce.Position = UDim2.new(0.05, 0, 0, 48)
+teleportOnce.BackgroundColor3 = Color3.fromRGB(50, 70, 180)
+teleportOnce.Text = "Téléporter une fois"
+teleportOnce.TextColor3 = Color3.fromRGB(255,255,255)
+teleportOnce.Font = Enum.Font.Gotham
+teleportOnce.TextSize = 11
+teleportOnce.BorderSizePixel = 0
+teleportOnce.Parent = gTeleport
+local onceCorner = Instance.new("UICorner")
+onceCorner.CornerRadius = UDim.new(0, 4)
+onceCorner.Parent = teleportOnce
+
+local teleportCont = Instance.new("TextButton")
+teleportCont.Size = UDim2.new(0.4, 0, 0, 20)
+teleportCont.Position = UDim2.new(0.55, 0, 0, 48)
+teleportCont.BackgroundColor3 = Color3.fromRGB(60,60,70)
+teleportCont.Text = "OFF"
+teleportCont.TextColor3 = Color3.fromRGB(200,200,200)
+teleportCont.Font = Enum.Font.Gotham
+teleportCont.TextSize = 11
+teleportCont.BorderSizePixel = 0
+teleportCont.Parent = gTeleport
+local contCorner = Instance.new("UICorner")
+contCorner.CornerRadius = UDim.new(0, 4)
+contCorner.Parent = teleportCont
+
+local teleportState = false
+teleportCont.MouseButton1Click:Connect(function()
+    teleportState = not teleportState
+    teleportCont.Text = teleportState and "ON" or "OFF"
+    teleportCont.BackgroundColor3 = teleportState and Color3.fromRGB(70, 170, 70) or Color3.fromRGB(60,60,70)
+    state.teleportContinuous = teleportState
+    if teleportState then
         if teleportConnection then teleportConnection:Disconnect() end
         teleportConnection = RunService.Heartbeat:Connect(function()
-            if teleportContinuous then
-                local target = getTargetPlayer()
-                if target then
-                    teleportToPlayer(target)
-                end
+            if state.teleportContinuous then
+                local target = getTargetPlayer(targetBox.Text)
+                if target then teleportToPlayer(target) end
             end
         end)
     else
@@ -475,123 +383,237 @@ teleportContBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ESP
-local espHighlights = {}
-local espNameLabels = {}
+teleportOnce.MouseButton1Click:Connect(function()
+    local target = getTargetPlayer(targetBox.Text)
+    if target then
+        teleportToPlayer(target)
+    else
+        -- petite notification visuelle
+        teleportOnce.Text = "❌ Introuvable"
+        wait(1)
+        teleportOnce.Text = "Téléporter une fois"
+    end
+end)
 
-local function addESPForPlayer(player)
-    if player == LocalPlayer then return end
-    if espHighlights[player] then return end
+-- Ajuster la taille du canvas
+content.CanvasSize = UDim2.new(0, 0, 0, y + 10)
 
-    local function onCharacterAdded(char)
-        if not espToggle then return end
-        wait(0.2) -- laisser le temps au character de se stabiliser
+-- ==================== FONCTIONS DE JEU ====================
+function getTargetPlayer(name)
+    if name == "" then return nil end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if string.lower(plr.Name) == string.lower(name) or string.lower(plr.DisplayName) == string.lower(name) then
+            return plr
+        end
+    end
+    return nil
+end
+
+function teleportToPlayer(player)
+    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    local char, _ = getCharacter()
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if root then
+        root.CFrame = player.Character.HumanoidRootPart.CFrame
+    end
+end
+
+-- ==================== VOL (DOUBLE SAUT) ====================
+local function toggleFly()
+    state.fly = not state.fly
+    if state.fly then
+        local torso = getTorso()
+        if torso then
+            flyBodyVelocity = Instance.new("BodyVelocity")
+            flyBodyVelocity.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+            flyBodyVelocity.Velocity = Vector3.new(0, flySpeed, 0)
+            flyBodyVelocity.Parent = torso
+        end
+        Humanoid.PlatformStand = true
+        Humanoid.Sit = false
+    else
+        if flyBodyVelocity then
+            flyBodyVelocity:Destroy()
+            flyBodyVelocity = nil
+        end
+        Humanoid.PlatformStand = false
+    end
+end
+
+local function onJump()
+    local currentTime = tick()
+    if currentTime - lastJumpTime < doubleJumpThreshold then
+        toggleFly()
+    end
+    lastJumpTime = currentTime
+end
+
+local function setupJump()
+    local char, hum = getCharacter()
+    hum.Jump:Connect(onJump)
+end
+setupJump()
+
+-- Gestion du vol en continu (déplacements)
+RunService.Heartbeat:Connect(function()
+    if state.fly then
+        local torso = getTorso()
+        if not torso or not flyBodyVelocity then return end
+        local camera = workspace.CurrentCamera
+        local forward = camera.CFrame.LookVector * Vector3.new(1,0,1)
+        local right = camera.CFrame.RightVector * Vector3.new(1,0,1)
+        local up = Vector3.new(0,1,0)
+        local vel = Vector3.new(0,0,0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then vel = vel + forward end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then vel = vel - forward end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then vel = vel - right end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then vel = vel + right end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vel = vel + up end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then vel = vel - up end
+        if vel.Magnitude > 0 then
+            vel = vel.Unit * flySpeed
+        else
+            vel = Vector3.new(0, flySpeed, 0)
+        end
+        flyBodyVelocity.Velocity = vel
+    end
+end)
+
+-- ==================== GOD MODE ====================
+RunService.Heartbeat:Connect(function()
+    if state.godMode then
+        local char, hum = getCharacter()
+        if hum and hum.Health < hum.MaxHealth then
+            hum.Health = hum.MaxHealth
+        end
+    end
+end)
+
+-- ==================== ESP ====================
+function refreshESP()
+    if state.espToggle then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                addESPForPlayer(plr)
+            end
+        end
+    else
+        for plr, _ in pairs(espData.highlights) do
+            removeESPForPlayer(plr)
+        end
+    end
+end
+
+function addESPForPlayer(player)
+    if espData.highlights[player] then return end
+    local function onCharAdded(char)
+        wait(0.2)
+        if not state.espToggle then return end
         -- Highlight
         local highlight = Instance.new("Highlight")
-        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+        highlight.FillColor = Color3.fromRGB(255, 50, 50)
         highlight.FillTransparency = 0.6
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.OutlineColor = Color3.fromRGB(255,255,255)
         highlight.OutlineTransparency = 0.3
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         highlight.Adornee = char
         highlight.Parent = char
-        espHighlights[player] = highlight
+        espData.highlights[player] = highlight
 
-        -- BillboardGui pour le nom
-        local billboard = Instance.new("BillboardGui")
-        billboard.Size = UDim2.new(0, 200, 0, 50)
-        billboard.Adornee = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-        billboard.AlwaysOnTop = true
-        billboard.Parent = char
-
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Text = player.DisplayName or player.Name
-        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        nameLabel.TextSize = 18
-        nameLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
-        nameLabel.TextStrokeTransparency = 0.3
-        nameLabel.Font = Enum.Font.GothamBold
-        nameLabel.Parent = billboard
-
-        espNameLabels[player] = billboard
+        -- Billboard
+        local bill = Instance.new("BillboardGui")
+        bill.Size = UDim2.new(0, 150, 0, 30)
+        bill.Adornee = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+        bill.AlwaysOnTop = true
+        bill.Parent = char
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1,0,1,0)
+        label.BackgroundTransparency = 1
+        label.Text = player.DisplayName or player.Name
+        label.TextColor3 = Color3.fromRGB(255,255,255)
+        label.TextSize = 14
+        label.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+        label.TextStrokeTransparency = 0.2
+        label.Font = Enum.Font.GothamBold
+        label.Parent = bill
+        espData.billboards[player] = bill
     end
-
     if player.Character then
-        onCharacterAdded(player.Character)
+        onCharAdded(player.Character)
     end
     player.CharacterAdded:Connect(function(char)
-        onCharacterAdded(char)
+        onCharAdded(char)
     end)
 end
 
-local function removeESPForPlayer(player)
-    if espHighlights[player] then
-        espHighlights[player]:Destroy()
-        espHighlights[player] = nil
+function removeESPForPlayer(player)
+    if espData.highlights[player] then
+        espData.highlights[player]:Destroy()
+        espData.highlights[player] = nil
     end
-    if espNameLabels[player] then
-        espNameLabels[player]:Destroy()
-        espNameLabels[player] = nil
-    end
-end
-
-local function refreshESP()
-    if espToggle then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                addESPForPlayer(player)
-            end
-        end
-    else
-        for player, _ in pairs(espHighlights) do
-            removeESPForPlayer(player)
-        end
+    if espData.billboards[player] then
+        espData.billboards[player]:Destroy()
+        espData.billboards[player] = nil
     end
 end
 
 Players.PlayerAdded:Connect(function(player)
-    if espToggle then
-        addESPForPlayer(player)
-    end
+    if state.espToggle then addESPForPlayer(player) end
 end)
-
 Players.PlayerRemoving:Connect(function(player)
     removeESPForPlayer(player)
 end)
 
-espToggleBtn.MouseButton1Click:Connect(function()
-    espToggle = not espToggle
-    espToggleBtn.Text = espToggle and "Activé" or "Désactivé"
-    refreshESP()
-end)
-
--- Gestion minimiser / fermer
-local minimized = false
-minimizeButton.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    mainFrame.Visible = not minimized
-    if minimized then
-        minimizeButton.Text = "+"
-    else
-        minimizeButton.Text = "-"
+-- ==================== GESTION RESPAWN ====================
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    Character = newChar
+    Humanoid = Character:WaitForChild("Humanoid")
+    setupJump()
+    wait(0.5)
+    -- Réappliquer les toggles
+    if state.speedToggle then
+        local val = tonumber(speedRow.box.Text) or 16
+        state.speedValue = val
+        Humanoid.WalkSpeed = val
+    end
+    if state.jumpToggle then
+        local val = tonumber(jumpRow.box.Text) or 50
+        state.jumpValue = val
+        Humanoid.JumpPower = val
+    end
+    if state.noclipToggle then
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+    if state.fly then
+        state.fly = false
+        if flyBodyVelocity then
+            flyBodyVelocity:Destroy()
+            flyBodyVelocity = nil
+        end
+        Humanoid.PlatformStand = false
     end
 end)
 
-closeButton.MouseButton1Click:Connect(function()
-    -- Nettoyer les connexions et détruire le GUI
+-- ==================== RACCOURCI FERMETURE ====================
+local minimized = false
+minimizeBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    mainFrame.Visible = not minimized
+    minimizeBtn.Text = minimized and "⊕" or "─"
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
     if teleportConnection then teleportConnection:Disconnect() end
     if flyBodyVelocity then flyBodyVelocity:Destroy() end
-    -- Supprimer tous les ESP
-    for player, _ in pairs(espHighlights) do
-        removeESPForPlayer(player)
+    for plr, _ in pairs(espData.highlights) do
+        removeESPForPlayer(plr)
     end
     screenGui:Destroy()
 end)
 
--- Initialiser certains états
-refreshESP()
-
--- Notifications de démarrage (facultatif)
-print("Script chargé avec succès !")
+-- Petit message de démarrage
+print("✅ Menu Ultime chargé – UI compacte & moderne.")
