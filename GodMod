@@ -68,8 +68,12 @@ local DefaultJumpHeight = 7.2
 local FlyBodyVelocity = nil
 local FlyBodyGyro = nil
 
-local LastJumpRequest = 0
-local DoubleJumpWindow = 0.32
+-- Deux pressions distinctes sur le bouton de saut activent/désactivent le vol.
+-- Le délai minimum empêche un appui maintenu d'être compté deux fois.
+local LastJumpTap = 0
+local LastJumpSignal = 0
+local DoubleJumpMinGap = 0.08
+local DoubleJumpMaxGap = 0.40
 
 local Connections = {}
 local PlayerItems = {}
@@ -1138,12 +1142,24 @@ end))
 Track(UserInputService.JumpRequest:Connect(function()
     local currentTime = os.clock()
 
-    if currentTime - LastJumpRequest <= DoubleJumpWindow then
-        ToggleFly()
-        LastJumpRequest = 0
-    else
-        LastJumpRequest = currentTime
+    -- Ignore les signaux trop rapprochés produits par un même appui maintenu.
+    if currentTime - LastJumpSignal < DoubleJumpMinGap then
+        return
     end
+
+    LastJumpSignal = currentTime
+
+    local timeSincePreviousTap = currentTime - LastJumpTap
+
+    if LastJumpTap > 0
+        and timeSincePreviousTap >= DoubleJumpMinGap
+        and timeSincePreviousTap <= DoubleJumpMaxGap then
+        ToggleFly()
+        LastJumpTap = 0
+        return
+    end
+
+    LastJumpTap = currentTime
 end))
 
 --==================== Boucles principales =========
@@ -1208,9 +1224,12 @@ Track(RunService.RenderStepped:Connect(function()
 
     local flySpeed = State.FlySpeedValue
     local cameraCFrame = camera.CFrame
-    local forward = cameraCFrame.LookVector
-    local right = cameraCFrame.RightVector
-    local up = cameraCFrame.UpVector
+
+    -- LookVector garde l'inclinaison verticale de la caméra.
+    -- Regarder vers le haut puis avancer fait donc réellement monter.
+    local forward = cameraCFrame.LookVector.Unit
+    local right = cameraCFrame.RightVector.Unit
+    local worldUp = Vector3.new(0, 1, 0)
     local direction = Vector3.new(0, 0, 0)
 
     if UserInputService:IsKeyDown(Enum.KeyCode.W) then
@@ -1229,32 +1248,57 @@ Track(RunService.RenderStepped:Connect(function()
         direction = direction + right
     end
 
+    -- Commandes verticales indépendantes de l'inclinaison de la caméra.
     if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-        direction = direction + up
+        direction = direction + worldUp
     end
 
     if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
         or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        direction = direction - up
+        direction = direction - worldUp
     end
 
-    -- Sur mobile, le joystick fournit Humanoid.MoveDirection.
+    -- Sur mobile, transforme la direction horizontale du joystick
+    -- dans le repère complet de la caméra, inclinaison comprise.
     if direction.Magnitude == 0 and humanoid.MoveDirection.Magnitude > 0 then
-        direction = humanoid.MoveDirection.Unit
+        local moveDirection = humanoid.MoveDirection
+        local cameraForwardFlat = Vector3.new(
+            cameraCFrame.LookVector.X,
+            0,
+            cameraCFrame.LookVector.Z
+        )
+
+        local cameraRightFlat = Vector3.new(
+            cameraCFrame.RightVector.X,
+            0,
+            cameraCFrame.RightVector.Z
+        )
+
+        if cameraForwardFlat.Magnitude > 0.001
+            and cameraRightFlat.Magnitude > 0.001 then
+            cameraForwardFlat = cameraForwardFlat.Unit
+            cameraRightFlat = cameraRightFlat.Unit
+
+            local forwardAmount = moveDirection:Dot(cameraForwardFlat)
+            local rightAmount = moveDirection:Dot(cameraRightFlat)
+
+            direction =
+                (forward * forwardAmount)
+                + (right * rightAmount)
+        end
     end
 
-    if direction.Magnitude > 0 then
+    if direction.Magnitude > 0.001 then
         FlyBodyVelocity.Velocity = direction.Unit * flySpeed
     else
         FlyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
     end
 
-    -- Le personnage regarde toujours dans la même direction que la caméra.
-    FlyBodyGyro.CFrame = CFrame.lookAt(
-        root.Position,
-        root.Position + forward,
-        up
-    )
+    -- Reprend exactement la rotation 3D de la caméra.
+    -- Cela évite les problèmes de CFrame.lookAt lorsque la caméra regarde
+    -- presque parfaitement vers le haut ou vers le bas.
+    local cameraRotation = cameraCFrame - cameraCFrame.Position
+    FlyBodyGyro.CFrame = CFrame.new(root.Position) * cameraRotation
 end))
 
 --==================== Joueurs et respawn ==========
