@@ -49,6 +49,9 @@ local State = {
     -- Impulsion client sur le personnage local.
     SpinEnabled = false,
 
+    -- Vue locale contrôlée avec une fausse part.
+    GhostViewEnabled = false,
+
     NoclipEnabled = false,
     GodEnabled = false,
     ESPEnabled = false,
@@ -85,6 +88,12 @@ local FLING_DURATION = 0.16
 
 -- Valeur élevée : rotation très rapide.
 local FLING_ANGULAR_SPEED = 120
+
+-- Vue locale : la fausse part et la caméra existent seulement sur ce client.
+local GhostPart = nil
+local GhostOriginalCameraSubject = nil
+local GhostOriginalCameraType = nil
+local GHOST_MOVE_SPEED = 70
 
 -- Deux pressions distinctes sur le bouton de saut activent/désactivent le vol.
 -- Le délai minimum empêche un appui maintenu d'être compté deux fois.
@@ -490,6 +499,7 @@ local NoclipToggle = CreateButton(PowersGridHolder, "Noclip OFF", 1)
 local GodToggle = CreateButton(PowersGridHolder, "God OFF", 1)
 local ESPToggle = CreateButton(PowersGridHolder, "ESP OFF", 1)
 local SpinToggle = CreateButton(PowersGridHolder, "FLING", 1)
+local GhostToggle = CreateButton(PowersGridHolder, "Vue locale OFF", 1)
 
 --==================== Joueurs et téléportation =====
 
@@ -851,6 +861,89 @@ local function ClientFling()
     end)
 end
 
+--==================== Vue locale ===================
+
+local function StopGhostView()
+    State.GhostViewEnabled = false
+
+    local camera = Workspace.CurrentCamera
+    local _, humanoid = GetCharacterParts()
+
+    if camera then
+        camera.CameraType =
+            GhostOriginalCameraType
+            or Enum.CameraType.Custom
+
+        camera.CameraSubject =
+            GhostOriginalCameraSubject
+            or humanoid
+    end
+
+    GhostOriginalCameraSubject = nil
+    GhostOriginalCameraType = nil
+
+    if GhostPart then
+        GhostPart:Destroy()
+        GhostPart = nil
+    end
+
+    SetToggleVisual(
+        GhostToggle,
+        false,
+        "Vue locale ON",
+        "Vue locale OFF"
+    )
+end
+
+local function StartGhostView()
+    local _, humanoid, root = GetCharacterParts()
+    local camera = Workspace.CurrentCamera
+
+    if not humanoid or not root or not camera then
+        return
+    end
+
+    StopGhostView()
+
+    GhostOriginalCameraSubject = camera.CameraSubject
+    GhostOriginalCameraType = camera.CameraType
+
+    local fakePart = Instance.new("Part")
+    fakePart.Name = "LocalGhostCameraPart"
+    fakePart.Size = Vector3.new(3, 3, 3)
+    fakePart.CFrame = root.CFrame
+    fakePart.Anchored = true
+    fakePart.CanCollide = false
+    fakePart.CanTouch = false
+    fakePart.CanQuery = false
+    fakePart.Massless = true
+    fakePart.Transparency = 0.45
+    fakePart.Material = Enum.Material.ForceField
+    fakePart.Color = COLORS.Green
+    fakePart.Parent = Workspace
+
+    GhostPart = fakePart
+    State.GhostViewEnabled = true
+
+    camera.CameraType = Enum.CameraType.Custom
+    camera.CameraSubject = fakePart
+
+    SetToggleVisual(
+        GhostToggle,
+        true,
+        "Vue locale ON",
+        "Vue locale OFF"
+    )
+end
+
+local function ToggleGhostView()
+    if State.GhostViewEnabled then
+        StopGhostView()
+    else
+        StartGhostView()
+    end
+end
+
 --==================== Noclip ======================
 
 local function ApplyNoclip()
@@ -1190,6 +1283,7 @@ local function Cleanup()
     State.Closed = true
     State.TeleportContinuous = false
 
+    StopGhostView()
     StopSpin()
     StopFly()
     RestoreMovementValues()
@@ -1298,6 +1392,7 @@ Track(FlyToggle.MouseButton1Click:Connect(function()
 end))
 
 Track(SpinToggle.MouseButton1Click:Connect(ClientFling))
+Track(GhostToggle.MouseButton1Click:Connect(ToggleGhostView))
 
 Track(NoclipToggle.MouseButton1Click:Connect(function()
     if State.SpinEnabled then
@@ -1417,6 +1512,55 @@ Track(RunService.Heartbeat:Connect(function(deltaTime)
     end
 end))
 
+Track(RunService.RenderStepped:Connect(function(deltaTime)
+    if not State.GhostViewEnabled then
+        return
+    end
+
+    local camera = Workspace.CurrentCamera
+
+    if not GhostPart or not GhostPart.Parent or not camera then
+        StopGhostView()
+        return
+    end
+
+    local cameraCFrame = camera.CFrame
+    local direction = Vector3.zero
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+        direction += cameraCFrame.LookVector
+    end
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+        direction -= cameraCFrame.LookVector
+    end
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+        direction -= cameraCFrame.RightVector
+    end
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+        direction += cameraCFrame.RightVector
+    end
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space)
+        or UserInputService:IsKeyDown(Enum.KeyCode.E) then
+        direction += Vector3.new(0, 1, 0)
+    end
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+        or UserInputService:IsKeyDown(Enum.KeyCode.Q) then
+        direction -= Vector3.new(0, 1, 0)
+    end
+
+    if direction.Magnitude > 0.001 then
+        GhostPart.Position +=
+            direction.Unit
+            * GHOST_MOVE_SPEED
+            * deltaTime
+    end
+end))
+
 Track(RunService.RenderStepped:Connect(function()
     if not State.FlyEnabled then
         return
@@ -1533,6 +1677,7 @@ Track(Players.PlayerRemoving:Connect(function(player)
 end))
 
 Track(LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    StopGhostView()
     StopSpin()
     RestoreNoclip()
     StopFly()
@@ -1598,9 +1743,16 @@ SpeedBox.Text = tostring(DefaultWalkSpeed)
 JumpBox.Text = tostring(DefaultJumpPower)
 FlySpeedBox.Text = tostring(State.FlySpeedValue)
 
+SetToggleVisual(
+    GhostToggle,
+    false,
+    "Vue locale ON",
+    "Vue locale OFF"
+)
+
 UpdateDistanceDisplay(0)
 RefreshPlayerList("")
 RefreshESP()
 BindViewportResize()
 
-print("Menu Roblox chargé avec fling client local.")
+print("Menu Roblox chargé avec fling et vue locale.")
