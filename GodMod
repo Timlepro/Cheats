@@ -45,9 +45,6 @@ local State = {
     FlyEnabled = false,
     FlySpeedValue = 55,
 
-    -- Effet de rotation visuelle locale, sans déplacement physique.
-    SpinEnabled = false,
-
     NoclipEnabled = false,
     GodEnabled = false,
     ESPEnabled = false,
@@ -63,7 +60,6 @@ local State = {
     LockWindow = false,
     MenuOpacity = 1,
     ManualScale = 1,
-    OpenButtonHeight = 0.30,
     ActiveTab = "Main",
 }
 
@@ -79,13 +75,6 @@ local DefaultJumpHeight = 7.2
 local FlyBodyVelocity = nil
 local FlyBodyGyro = nil
 
-local SpinMotor = nil
-local SpinOriginalTransform = nil
-local SpinConnection = nil
-local SpinToken = 0
-
-local SPIN_DURATION = 1.10
-local SPIN_SPEED_RADIANS = math.rad(9000)
 
 local LastJumpTap = 0
 local DoubleJumpMaxGap = 0.40
@@ -398,10 +387,10 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
-local BASE_WIDTH = 330
-local BASE_HEIGHT = 400
-local TITLE_HEIGHT = 36
-local TABS_HEIGHT = 34
+local BASE_WIDTH = 300
+local BASE_HEIGHT = 330
+local TITLE_HEIGHT = 34
+local TABS_HEIGHT = 30
 local MAX_INTERFACE_SCALE = 0.92
 local MIN_INTERFACE_SCALE = 0.50
 
@@ -499,7 +488,7 @@ AddCorner(CloseButton, 6)
 local OpenMenuCanvas = Instance.new("CanvasGroup")
 OpenMenuCanvas.Name = "OpenMenuCanvas"
 OpenMenuCanvas.AnchorPoint = Vector2.new(0, 0.5)
-OpenMenuCanvas.Size = UDim2.fromOffset(62, 40)
+OpenMenuCanvas.Size = UDim2.fromOffset(56, 36)
 OpenMenuCanvas.Position = UDim2.new(0, 8, 0.30, 0)
 OpenMenuCanvas.BackgroundTransparency = 1
 OpenMenuCanvas.BorderSizePixel = 0
@@ -568,7 +557,7 @@ ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 --==================== Réglages des valeurs ========
 
-local MovementSection = CreateSection(Content, "Réglages des valeurs", 168)
+local MovementSection = CreateSection(Content, "Réglages des valeurs", 146)
 
 local SpeedRow = CreateRow(MovementSection, 34, 6)
 
@@ -595,10 +584,10 @@ local FlySpeedBox = CreateTextBox(FlySpeedRow, "55", "Valeur", 0.34)
 
 --==================== Fonctions du personnage =====
 
-local PowersSection = CreateSection(Content, "Fonctions du personnage", 152)
+local PowersSection = CreateSection(Content, "Fonctions du personnage", 116)
 
 local PowersGridHolder = Instance.new("Frame")
-PowersGridHolder.Size = UDim2.new(1, 0, 0, 108)
+PowersGridHolder.Size = UDim2.new(1, 0, 0, 72)
 PowersGridHolder.BackgroundTransparency = 1
 PowersGridHolder.ClipsDescendants = true
 PowersGridHolder.Parent = PowersSection
@@ -614,11 +603,10 @@ local FlyToggle = CreateButton(PowersGridHolder, "Vol OFF", 1)
 local NoclipToggle = CreateButton(PowersGridHolder, "Noclip OFF", 1)
 local GodToggle = CreateButton(PowersGridHolder, "God OFF", 1)
 local ESPToggle = CreateButton(PowersGridHolder, "ESP OFF", 1)
-local SpinToggle = CreateButton(PowersGridHolder, "Effet fling", 1)
 
 --==================== Joueurs et téléportation =====
 
-local TeleportSection = CreateSection(Content, "Joueurs et téléportation", 280)
+local TeleportSection = CreateSection(Content, "Joueurs et téléportation", 210)
 
 local SearchRow = CreateRow(TeleportSection, 34, 6)
 
@@ -643,7 +631,7 @@ SelectedLabel.TextSize = 12
 
 local PlayerListFrame = Instance.new("ScrollingFrame")
 PlayerListFrame.Name = "PlayerList"
-PlayerListFrame.Size = UDim2.new(1, 0, 0, 112)
+PlayerListFrame.Size = UDim2.new(1, 0, 0, 68)
 PlayerListFrame.BackgroundColor3 = COLORS.Background
 PlayerListFrame.BorderSizePixel = 0
 PlayerListFrame.ClipsDescendants = true
@@ -685,7 +673,7 @@ SettingsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 local DisplaySection = CreateSection(
     SettingsContent,
     "Affichage du menu",
-    238
+    184
 )
 
 local RecenterRow = CreateRow(DisplaySection, 34, 6)
@@ -729,25 +717,11 @@ local SetScaleSlider = CreateSlider(
     end
 )
 
-local SetSideHeightSlider = CreateSlider(
-    DisplaySection,
-    "Hauteur bouton",
-    0.10,
-    0.80,
-    State.OpenButtonHeight,
-    function(value)
-        return string.format("%d%%", math.floor(value * 100 + 0.5))
-    end,
-    function(value)
-        State.OpenButtonHeight = value
-        OpenMenuCanvas.Position = UDim2.new(0, 8, value, 0)
-    end
-)
 
 local ActionsSection = CreateSection(
     SettingsContent,
     "Actions rapides",
-    112
+    98
 )
 
 local CenterNowButton = CreateButton(
@@ -974,108 +948,6 @@ local function RestoreMovementValues()
     humanoid.UseJumpPower = DefaultUseJumpPower
     humanoid.JumpPower = DefaultJumpPower
     humanoid.JumpHeight = DefaultJumpHeight
-end
-
---==================== Effet fling visuel ===========
-
-local function FindSpinMotor(character, root)
-    if not character or not root then
-        return nil
-    end
-
-    local rootJoint = root:FindFirstChild("RootJoint")
-    if rootJoint and rootJoint:IsA("Motor6D") then
-        return rootJoint
-    end
-
-    for _, object in ipairs(character:GetDescendants()) do
-        if object:IsA("Motor6D")
-            and object.Part0 == root
-            and (object.Name == "Root" or object.Name == "RootJoint") then
-            return object
-        end
-    end
-
-    for _, object in ipairs(character:GetDescendants()) do
-        if object:IsA("Motor6D") and object.Part0 == root then
-            return object
-        end
-    end
-
-    return nil
-end
-
-local function StopSpin()
-    SpinToken += 1
-    State.SpinEnabled = false
-
-    if SpinConnection then
-        SpinConnection:Disconnect()
-        SpinConnection = nil
-    end
-
-    if SpinMotor and SpinMotor.Parent and SpinOriginalTransform then
-        SpinMotor.Transform = SpinOriginalTransform
-    end
-
-    SpinMotor = nil
-    SpinOriginalTransform = nil
-
-    if SpinToggle and SpinToggle.Parent then
-        SpinToggle.Text = "Effet fling"
-        SpinToggle.BackgroundColor3 = COLORS.Element
-    end
-end
-
-local function ClientFling()
-    local character, _, root = GetCharacterParts()
-
-    if not character or not root then
-        return
-    end
-
-    StopSpin()
-
-    SpinMotor = FindSpinMotor(character, root)
-
-    if not SpinMotor then
-        warn("Le RootJoint du personnage est introuvable.")
-        return
-    end
-
-    SpinOriginalTransform = SpinMotor.Transform
-    State.SpinEnabled = true
-    SpinToken += 1
-
-    local currentToken = SpinToken
-    local elapsed = 0
-    local angle = 0
-
-    SpinToggle.Text = "Effet..."
-    SpinToggle.BackgroundColor3 = COLORS.Green
-
-    SpinConnection = RunService.PreSimulation:Connect(function(deltaTime)
-        if not State.SpinEnabled
-            or currentToken ~= SpinToken
-            or not SpinMotor
-            or not SpinMotor.Parent then
-            return
-        end
-
-        elapsed += deltaTime
-        angle += SPIN_SPEED_RADIANS * deltaTime
-
-        local wobbleX = math.sin(elapsed * 44) * math.rad(28)
-        local wobbleZ = math.cos(elapsed * 39) * math.rad(28)
-
-        SpinMotor.Transform =
-            SpinOriginalTransform
-            * CFrame.Angles(wobbleX, angle, wobbleZ)
-
-        if elapsed >= SPIN_DURATION then
-            StopSpin()
-        end
-    end)
 end
 
 --==================== Noclip ======================
@@ -1455,7 +1327,6 @@ Track(ResetSettingsButton.MouseButton1Click:Connect(function()
 
     SetOpacitySlider(1, true)
     SetScaleSlider(1, true)
-    SetSideHeightSlider(0.30, true)
 
     MainFrame.Position = UDim2.fromScale(0.5, 0.5)
 end))
@@ -1468,7 +1339,6 @@ local function Cleanup()
     State.Closed = true
     State.TeleportContinuous = false
 
-    StopSpin()
     StopFly()
     RestoreMovementValues()
     RestoreNoclip()
@@ -1567,21 +1437,9 @@ Track(FlySpeedBox.FocusLost:Connect(function()
     FlySpeedBox.Text = tostring(State.FlySpeedValue)
 end))
 
-Track(FlyToggle.MouseButton1Click:Connect(function()
-    if State.SpinEnabled then
-        StopSpin()
-    end
-
-    ToggleFly()
-end))
-
-Track(SpinToggle.MouseButton1Click:Connect(ClientFling))
+Track(FlyToggle.MouseButton1Click:Connect(ToggleFly))
 
 Track(NoclipToggle.MouseButton1Click:Connect(function()
-    if State.SpinEnabled then
-        StopSpin()
-    end
-
     SetNoclip(not State.NoclipEnabled)
 end))
 
@@ -1631,10 +1489,6 @@ local function RegisterJumpTap()
 
     if LastJumpTap > 0
         and timeSincePreviousTap <= DoubleJumpMaxGap then
-        if State.SpinEnabled then
-            StopSpin()
-        end
-
         ToggleFly()
         LastJumpTap = 0
         return
@@ -1845,7 +1699,6 @@ Track(Players.PlayerRemoving:Connect(function(player)
 end))
 
 Track(LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-    StopSpin()
     RestoreNoclip()
     StopFly()
 
@@ -1915,4 +1768,4 @@ RefreshPlayerList("")
 RefreshESP()
 BindViewportResize()
 
-print("Menu Roblox chargé avec paramètres et effet fling visuel.")
+print("Menu Roblox compact chargé sans fonction fling.")
