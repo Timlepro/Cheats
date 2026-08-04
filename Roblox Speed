@@ -203,7 +203,7 @@ SpeedLabel.ZIndex = 3
 
 -- Champ de saisie de la vitesse
 local SpeedBox = Instance.new("TextBox")
-SpeedBox.Size = UDim2.new(0.3, 0, 0.3, 0)
+SpeedBox.Size = UDim2.new(0.35, 0, 0.3, 0)  -- légèrement élargi
 SpeedBox.Position = UDim2.new(0.5, 0, 0.1, 0)
 SpeedBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 SpeedBox.BackgroundTransparency = 0.2
@@ -228,18 +228,19 @@ SpeedBox.FocusLost:Connect(function(enterPressed)
     end
 end)
 
--- Bouton Toggle ON/OFF
+-- Bouton Toggle ON/OFF (traduit)
 local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0, 80, 0, 30)
-ToggleButton.Position = UDim2.new(0.5, -40, 0.55, 0)
+ToggleButton.Size = UDim2.new(0, 120, 0, 34)  -- plus large pour accueillir "ACTIVÉ" / "DÉSACTIVÉ"
+ToggleButton.Position = UDim2.new(0.5, -60, 0.55, 0)
 ToggleButton.BackgroundColor3 = isEnabled and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
 ToggleButton.BackgroundTransparency = 0.2
 ToggleButton.BorderSizePixel = 1
 ToggleButton.BorderColor3 = isEnabled and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
-ToggleButton.Text = isEnabled and "✅ ON" or "❌ OFF"
+ToggleButton.Text = isEnabled and "✅ ACTIVÉ" or "❌ DÉSACTIVÉ"
 ToggleButton.TextColor3 = isEnabled and Color3.fromRGB(180, 255, 200) or Color3.fromRGB(255, 180, 180)
 ToggleButton.TextSize = GetAdaptiveFontSize() - 2
 ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextScaled = true  -- adapte automatiquement la taille de la police
 ToggleButton.Parent = Panel
 ToggleButton.ZIndex = 3
 ToggleButton.AutoButtonColor = false
@@ -247,8 +248,8 @@ Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 5)
 
 -- Indicateur d'état
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(0.5, 0, 0.2, 0)
-StatusLabel.Position = UDim2.new(0.25, 0, 0.8, 0)
+StatusLabel.Size = UDim2.new(0.6, 0, 0.2, 0)
+StatusLabel.Position = UDim2.new(0.2, 0, 0.8, 0)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.Text = isEnabled and "✔ Actif (réappliqué toutes les secondes)" or "⏸ Désactivé"
 StatusLabel.TextColor3 = isEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(200, 200, 200)
@@ -260,7 +261,7 @@ StatusLabel.ZIndex = 3
 -- Fonction pour basculer
 local function ToggleSpeed()
     isEnabled = not isEnabled
-    ToggleButton.Text = isEnabled and "✅ ON" or "❌ OFF"
+    ToggleButton.Text = isEnabled and "✅ ACTIVÉ" or "❌ DÉSACTIVÉ"
     ToggleButton.BackgroundColor3 = isEnabled and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
     ToggleButton.BorderColor3 = isEnabled and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
     ToggleButton.TextColor3 = isEnabled and Color3.fromRGB(180, 255, 200) or Color3.fromRGB(255, 180, 180)
@@ -374,7 +375,7 @@ end
 -- Exécution toutes les secondes
 coroutine.wrap(function()
     while true do
-        wait(1)
+        wait(0.1)
         ApplySpeed()
     end
 end)()
@@ -391,7 +392,7 @@ end)
 LoadSettings()
 -- Mise à jour de l'interface selon les valeurs chargées
 SpeedBox.Text = tostring(targetSpeed)
-ToggleButton.Text = isEnabled and "✅ ON" or "❌ OFF"
+ToggleButton.Text = isEnabled and "✅ ACTIVÉ" or "❌ DÉSACTIVÉ"
 ToggleButton.BackgroundColor3 = isEnabled and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
 ToggleButton.BorderColor3 = isEnabled and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
 ToggleButton.TextColor3 = isEnabled and Color3.fromRGB(180, 255, 200) or Color3.fromRGB(255, 180, 180)
@@ -429,7 +430,7 @@ _G.SetSpeed = function(value)
 end
 _G.EnableSpeed = function(enable)
     isEnabled = enable
-    ToggleButton.Text = isEnabled and "✅ ON" or "❌ OFF"
+    ToggleButton.Text = isEnabled and "✅ ACTIVÉ" or "❌ DÉSACTIVÉ"
     ToggleButton.BackgroundColor3 = isEnabled and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
     ToggleButton.BorderColor3 = isEnabled and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
     ToggleButton.TextColor3 = isEnabled and Color3.fromRGB(180, 255, 200) or Color3.fromRGB(255, 180, 180)
