@@ -451,7 +451,7 @@ TitleLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -82, 1, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Menu God MOD"
+TitleLabel.Text = "Menu God MOD 👾"
 TitleLabel.TextColor3 = COLORS.Text
 TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.GothamBold
@@ -719,16 +719,8 @@ local SetScaleSlider = CreateSlider(
 local ActionsSection = CreateSection(
     SettingsContent,
     "Actions rapides",
-    98
+    58
 )
-
-local CenterNowButton = CreateButton(
-    ActionsSection,
-    "Recentrer maintenant",
-    1
-)
-CenterNowButton.Size = UDim2.new(1, 0, 0, 34)
-CenterNowButton.BackgroundColor3 = COLORS.Blue
 
 local ResetSettingsButton = CreateButton(
     ActionsSection,
@@ -736,6 +728,7 @@ local ResetSettingsButton = CreateButton(
     1
 )
 ResetSettingsButton.Size = UDim2.new(1, 0, 0, 34)
+ResetSettingsButton.BackgroundColor3 = COLORS.Red
 
 local function SetActiveTab(tabName)
     State.ActiveTab = tabName
@@ -1310,10 +1303,6 @@ Track(LockToggle.MouseButton1Click:Connect(function()
         "ON",
         "OFF"
     )
-end))
-
-Track(CenterNowButton.MouseButton1Click:Connect(function()
-    MainFrame.Position = UDim2.fromScale(0.5, 0.5)
 end))
 
 Track(ResetSettingsButton.MouseButton1Click:Connect(function()
