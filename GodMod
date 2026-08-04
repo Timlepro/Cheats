@@ -4,7 +4,6 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local Debris = game:GetService("Debris")
 
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then
@@ -80,19 +79,17 @@ local DefaultJumpHeight = 7.2
 local FlyBodyVelocity = nil
 local FlyBodyGyro = nil
 
--- Effet visuel de rotation : aucune force physique n'est appliquée.
 local SpinMotor = nil
-local SpinOriginalC0 = nil
+local SpinOriginalTransform = nil
+local SpinConnection = nil
 local SpinToken = 0
-local SPIN_DURATION = 0.85
-local SPIN_SPEED_RADIANS = math.rad(7200)
 
--- Deux pressions distinctes sur le bouton de saut activent/désactivent le vol.
--- Le délai minimum empêche un appui maintenu d'être compté deux fois.
+local SPIN_DURATION = 1.10
+local SPIN_SPEED_RADIANS = math.rad(9000)
+
 local LastJumpTap = 0
-local LastJumpSignal = 0
-local DoubleJumpMinGap = 0.08
 local DoubleJumpMaxGap = 0.40
+local TouchJumpButtonBound = false
 
 local Connections = {}
 local PlayerItems = {}
@@ -986,6 +983,11 @@ local function FindSpinMotor(character, root)
         return nil
     end
 
+    local rootJoint = root:FindFirstChild("RootJoint")
+    if rootJoint and rootJoint:IsA("Motor6D") then
+        return rootJoint
+    end
+
     for _, object in ipairs(character:GetDescendants()) do
         if object:IsA("Motor6D")
             and object.Part0 == root
@@ -1007,12 +1009,17 @@ local function StopSpin()
     SpinToken += 1
     State.SpinEnabled = false
 
-    if SpinMotor and SpinMotor.Parent and SpinOriginalC0 then
-        SpinMotor.C0 = SpinOriginalC0
+    if SpinConnection then
+        SpinConnection:Disconnect()
+        SpinConnection = nil
+    end
+
+    if SpinMotor and SpinMotor.Parent and SpinOriginalTransform then
+        SpinMotor.Transform = SpinOriginalTransform
     end
 
     SpinMotor = nil
-    SpinOriginalC0 = nil
+    SpinOriginalTransform = nil
 
     if SpinToggle and SpinToggle.Parent then
         SpinToggle.Text = "Effet fling"
@@ -1030,51 +1037,42 @@ local function ClientFling()
     StopSpin()
 
     SpinMotor = FindSpinMotor(character, root)
+
     if not SpinMotor then
-        warn("Articulation principale du personnage introuvable.")
+        warn("Le RootJoint du personnage est introuvable.")
         return
     end
 
-    SpinOriginalC0 = SpinMotor.C0
+    SpinOriginalTransform = SpinMotor.Transform
     State.SpinEnabled = true
     SpinToken += 1
 
     local currentToken = SpinToken
-    local startTime = os.clock()
-    local lastTime = startTime
+    local elapsed = 0
     local angle = 0
 
     SpinToggle.Text = "Effet..."
     SpinToggle.BackgroundColor3 = COLORS.Green
 
-    task.spawn(function()
-        while State.SpinEnabled
-            and currentToken == SpinToken
-            and SpinMotor
-            and SpinMotor.Parent do
-
-            local now = os.clock()
-            local elapsed = now - startTime
-            local deltaTime = now - lastTime
-            lastTime = now
-
-            if elapsed >= SPIN_DURATION then
-                break
-            end
-
-            angle += SPIN_SPEED_RADIANS * deltaTime
-
-            local wobbleX = math.sin(elapsed * 35) * math.rad(18)
-            local wobbleZ = math.cos(elapsed * 31) * math.rad(18)
-
-            SpinMotor.C0 =
-                SpinOriginalC0
-                * CFrame.Angles(wobbleX, angle, wobbleZ)
-
-            RunService.RenderStepped:Wait()
+    SpinConnection = RunService.PreSimulation:Connect(function(deltaTime)
+        if not State.SpinEnabled
+            or currentToken ~= SpinToken
+            or not SpinMotor
+            or not SpinMotor.Parent then
+            return
         end
 
-        if currentToken == SpinToken then
+        elapsed += deltaTime
+        angle += SPIN_SPEED_RADIANS * deltaTime
+
+        local wobbleX = math.sin(elapsed * 44) * math.rad(28)
+        local wobbleZ = math.cos(elapsed * 39) * math.rad(28)
+
+        SpinMotor.Transform =
+            SpinOriginalTransform
+            * CFrame.Angles(wobbleX, angle, wobbleZ)
+
+        if elapsed >= SPIN_DURATION then
             StopSpin()
         end
     end)
@@ -1627,20 +1625,11 @@ Track(SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     RefreshPlayerList(SearchBox.Text)
 end))
 
-Track(UserInputService.JumpRequest:Connect(function()
+local function RegisterJumpTap()
     local currentTime = os.clock()
-
-    -- Ignore les signaux trop rapprochés produits par un même appui maintenu.
-    if currentTime - LastJumpSignal < DoubleJumpMinGap then
-        return
-    end
-
-    LastJumpSignal = currentTime
-
     local timeSincePreviousTap = currentTime - LastJumpTap
 
     if LastJumpTap > 0
-        and timeSincePreviousTap >= DoubleJumpMinGap
         and timeSincePreviousTap <= DoubleJumpMaxGap then
         if State.SpinEnabled then
             StopSpin()
@@ -1652,7 +1641,50 @@ Track(UserInputService.JumpRequest:Connect(function()
     end
 
     LastJumpTap = currentTime
+end
+
+Track(UserInputService.InputBegan:Connect(function(input)
+    if UserInputService:GetFocusedTextBox() then
+        return
+    end
+
+    if input.KeyCode == Enum.KeyCode.Space
+        or input.KeyCode == Enum.KeyCode.ButtonA then
+        RegisterJumpTap()
+    end
 end))
+
+local function BindTouchJumpButton()
+    if TouchJumpButtonBound then
+        return true
+    end
+
+    local touchGui = PlayerGui:FindFirstChild("TouchGui")
+    if not touchGui then
+        return false
+    end
+
+    local jumpButton = touchGui:FindFirstChild("JumpButton", true)
+
+    if not jumpButton or not jumpButton:IsA("GuiButton") then
+        return false
+    end
+
+    TouchJumpButtonBound = true
+    Track(jumpButton.Activated:Connect(RegisterJumpTap))
+
+    return true
+end
+
+task.spawn(function()
+    for _ = 1, 60 do
+        if State.Closed or BindTouchJumpButton() then
+            return
+        end
+
+        task.wait(0.25)
+    end
+end)
 
 --==================== Boucles principales =========
 
