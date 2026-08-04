@@ -1,7 +1,7 @@
 --[[
-    Script Local Ultime – Interface moderne (inspirée de l'exemple)
-    Fonctions : Vol (double-saut), Speed, Jump, Noclip, God, ESP, Téléportation (une fois / continue)
-    Tout en local, fenêtre déplaçable, réductible, fermable.
+    Script Ultime – Toutes fonctions
+    UI sans réduction ni fermeture, sélection de joueur via liste (clique pour sélectionner),
+    puis boutons de téléportation (une fois / continue).
 ]]
 
 local Players = game:GetService("Players")
@@ -25,9 +25,10 @@ local state = {
     godMode = false,
     espToggle = false,
     teleportContinuous = false,
-    teleportTarget = nil,
-    teleportDistance = 0,  -- décalage vertical
+    selectedPlayer = nil,      -- joueur sélectionné dans la liste
+    teleportDistance = 0,
 }
+
 local flyBodyVelocity = nil
 local flySpeed = 50
 local lastJumpTime = 0
@@ -47,7 +48,7 @@ local function getTorso()
     return char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
 end
 
--- ==================== CRÉATION DE L'UI (inspirée de votre exemple) ====================
+-- ==================== CRÉATION DE L'UI ====================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "UltimateMenu"
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
@@ -59,14 +60,14 @@ local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
 
 local function GetAdaptiveSize()
     local screenSize = workspace.CurrentCamera.ViewportSize
-    local width = math.min(0.35, 0.35) * screenSize.X  -- 35% de la largeur
-    local height = math.min(0.50, 0.50) * screenSize.Y -- 50% de la hauteur
+    local width = math.min(0.40, 0.40) * screenSize.X
+    local height = math.min(0.65, 0.65) * screenSize.Y
     if IsMobile or IsSmallScreen then
-        width = math.min(0.50, 0.50) * screenSize.X
-        height = math.min(0.60, 0.60) * screenSize.Y
+        width = math.min(0.60, 0.60) * screenSize.X
+        height = math.min(0.75, 0.75) * screenSize.Y
     end
-    width = math.max(320, width)
-    height = math.max(400, height)
+    width = math.max(350, width)
+    height = math.max(450, height)
     return width, height
 end
 
@@ -80,6 +81,8 @@ MainFrame.BorderColor3 = Color3.fromRGB(80, 80, 100)
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 MainFrame.Visible = true
+MainFrame.Active = true
+MainFrame.Draggable = true  -- rend déplaçable
 
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 16)
@@ -92,15 +95,7 @@ local function UpdateMainFrame()
 end
 UpdateMainFrame()
 
--- Glass effect
-local GlassEffect = Instance.new("Frame")
-GlassEffect.Size = UDim2.new(1, 0, 1, 0)
-GlassEffect.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-GlassEffect.BackgroundTransparency = 0.1
-GlassEffect.BorderSizePixel = 0
-GlassEffect.Parent = MainFrame
-
--- Barre de titre
+-- Barre de titre (sans boutons - et X)
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 32)
 TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
@@ -113,86 +108,26 @@ TitleCorner.CornerRadius = UDim.new(0, 12)
 TitleCorner.Parent = TitleBar
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(0.6, 0, 1, 0)
+Title.Size = UDim2.new(1, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "⚙️ Menu Ultime"
 Title.TextColor3 = Color3.fromRGB(220, 220, 230)
-Title.TextSize = 14
+Title.TextSize = 16
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Font = Enum.Font.GothamBold
 Title.Parent = TitleBar
 
--- Boutons réduire / fermer
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Size = UDim2.new(0, 24, 0, 24)
-MinimizeButton.Position = UDim2.new(1, -62, 0, 4)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(200, 200, 50)
-MinimizeButton.BackgroundTransparency = 0.2
-MinimizeButton.BorderSizePixel = 0
-MinimizeButton.Text = "−"
-MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeButton.TextSize = 18
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Parent = TitleBar
-
-local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 4)
-MinCorner.Parent = MinimizeButton
-
-local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.new(0, 24, 0, 24)
-CloseButton.Position = UDim2.new(1, -32, 0, 4)
-CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseButton.BackgroundTransparency = 0.2
-CloseButton.BorderSizePixel = 0
-CloseButton.Text = "✕"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 14
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Parent = TitleBar
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 4)
-CloseCorner.Parent = CloseButton
-
--- Animations (comme dans l'exemple)
-CloseButton.MouseEnter:Connect(function()
-    TweenService:Create(CloseButton, TweenInfo.new(0.2), {
-        BackgroundTransparency = 0.05,
-        BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    }):Play()
-end)
-CloseButton.MouseLeave:Connect(function()
-    TweenService:Create(CloseButton, TweenInfo.new(0.2), {
-        BackgroundTransparency = 0.2,
-        BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    }):Play()
-end)
-
-MinimizeButton.MouseEnter:Connect(function()
-    TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {
-        BackgroundTransparency = 0.05,
-        BackgroundColor3 = Color3.fromRGB(255, 255, 50)
-    }):Play()
-end)
-MinimizeButton.MouseLeave:Connect(function()
-    TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {
-        BackgroundTransparency = 0.2,
-        BackgroundColor3 = Color3.fromRGB(200, 200, 50)
-    }):Play()
-end)
-
--- Conteneur principal (sous la barre)
+-- Conteneur principal
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Size = UDim2.new(1, 0, 1, -32)
 ContentContainer.Position = UDim2.new(0, 0, 0, 32)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.Parent = MainFrame
 
--- ===== Panneau de contrôle =====
+-- ===== Panneau de contrôle (toggles, entrées) =====
 local ControlPanel = Instance.new("Frame")
-ControlPanel.Size = UDim2.new(1, 0, 0.38, 0)  -- un peu plus grand pour les contrôles
+ControlPanel.Size = UDim2.new(1, 0, 0.40, 0)
 ControlPanel.Position = UDim2.new(0, 0, 0, 0)
 ControlPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 ControlPanel.BackgroundTransparency = 0.15
@@ -203,103 +138,106 @@ local PanelCorner = Instance.new("UICorner")
 PanelCorner.CornerRadius = UDim.new(0, 6)
 PanelCorner.Parent = ControlPanel
 
--- Organisation : deux lignes pour les réglages (speed, jump, noclip, god) + une ligne pour la téléportation (recherche + distance)
--- Ligne 1 : Speed + Jump
+-- Organisation en 2 rangées de toggles + une rangée pour la téléportation
+
+-- Rangée 1 : Speed + Jump
 local Row1 = Instance.new("Frame")
 Row1.Size = UDim2.new(1, 0, 0.33, 0)
 Row1.Position = UDim2.new(0, 0, 0, 0)
 Row1.BackgroundTransparency = 1
 Row1.Parent = ControlPanel
 
+-- Speed
 local SpeedLabel = Instance.new("TextLabel")
-SpeedLabel.Size = UDim2.new(0.2, 0, 1, 0)
+SpeedLabel.Size = UDim2.new(0.18, 0, 1, 0)
 SpeedLabel.Position = UDim2.new(0.02, 0, 0, 0)
 SpeedLabel.BackgroundTransparency = 1
 SpeedLabel.Text = "🚀 Vitesse"
 SpeedLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-SpeedLabel.TextSize = 11
+SpeedLabel.TextSize = 12
 SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
 SpeedLabel.Font = Enum.Font.GothamMedium
 SpeedLabel.Parent = Row1
 
 local SpeedBox = Instance.new("TextBox")
 SpeedBox.Size = UDim2.new(0.12, 0, 0.6, 0)
-SpeedBox.Position = UDim2.new(0.22, 0, 0.2, 0)
+SpeedBox.Position = UDim2.new(0.20, 0, 0.2, 0)
 SpeedBox.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
 SpeedBox.BackgroundTransparency = 0.15
 SpeedBox.BorderSizePixel = 1
 SpeedBox.BorderColor3 = Color3.fromRGB(70, 70, 90)
 SpeedBox.Text = "16"
 SpeedBox.TextColor3 = Color3.fromRGB(220, 220, 240)
-SpeedBox.TextSize = 11
+SpeedBox.TextSize = 12
 SpeedBox.TextXAlignment = Enum.TextXAlignment.Center
 SpeedBox.Font = Enum.Font.GothamMedium
 SpeedBox.ClearTextOnFocus = false
 SpeedBox.Parent = Row1
 local SpeedBoxCorner = Instance.new("UICorner")
-SpeedBoxCorner.CornerRadius = UDim.new(0, 3)
+SpeedBoxCorner.CornerRadius = UDim.new(0, 4)
 SpeedBoxCorner.Parent = SpeedBox
 
 local SpeedToggle = Instance.new("TextButton")
 SpeedToggle.Size = UDim2.new(0.12, 0, 0.6, 0)
-SpeedToggle.Position = UDim2.new(0.36, 0, 0.2, 0)
+SpeedToggle.Position = UDim2.new(0.34, 0, 0.2, 0)
 SpeedToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
 SpeedToggle.BackgroundTransparency = 0.15
 SpeedToggle.BorderSizePixel = 0
 SpeedToggle.Text = "OFF"
 SpeedToggle.TextColor3 = Color3.fromRGB(200, 200, 200)
-SpeedToggle.TextSize = 11
+SpeedToggle.TextSize = 12
 SpeedToggle.Font = Enum.Font.GothamBold
 SpeedToggle.Parent = Row1
 local SpeedToggleCorner = Instance.new("UICorner")
-SpeedToggleCorner.CornerRadius = UDim.new(0, 3)
+SpeedToggleCorner.CornerRadius = UDim.new(0, 4)
 SpeedToggleCorner.Parent = SpeedToggle
 
+-- Jump
 local JumpLabel = Instance.new("TextLabel")
-JumpLabel.Size = UDim2.new(0.2, 0, 1, 0)
-JumpLabel.Position = UDim2.new(0.52, 0, 0, 0)
+JumpLabel.Size = UDim2.new(0.18, 0, 1, 0)
+JumpLabel.Position = UDim2.new(0.50, 0, 0, 0)
 JumpLabel.BackgroundTransparency = 1
 JumpLabel.Text = "🦘 Saut"
 JumpLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-JumpLabel.TextSize = 11
+JumpLabel.TextSize = 12
 JumpLabel.TextXAlignment = Enum.TextXAlignment.Left
 JumpLabel.Font = Enum.Font.GothamMedium
 JumpLabel.Parent = Row1
 
 local JumpBox = Instance.new("TextBox")
 JumpBox.Size = UDim2.new(0.12, 0, 0.6, 0)
-JumpBox.Position = UDim2.new(0.72, 0, 0.2, 0)
+JumpBox.Position = UDim2.new(0.68, 0, 0.2, 0)
 JumpBox.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
 JumpBox.BackgroundTransparency = 0.15
 JumpBox.BorderSizePixel = 1
 JumpBox.BorderColor3 = Color3.fromRGB(70, 70, 90)
 JumpBox.Text = "50"
 JumpBox.TextColor3 = Color3.fromRGB(220, 220, 240)
-JumpBox.TextSize = 11
+JumpBox.TextSize = 12
 JumpBox.TextXAlignment = Enum.TextXAlignment.Center
 JumpBox.Font = Enum.Font.GothamMedium
 JumpBox.ClearTextOnFocus = false
 JumpBox.Parent = Row1
 local JumpBoxCorner = Instance.new("UICorner")
-JumpBoxCorner.CornerRadius = UDim.new(0, 3)
+JumpBoxCorner.CornerRadius = UDim.new(0, 4)
 JumpBoxCorner.Parent = JumpBox
 
 local JumpToggle = Instance.new("TextButton")
 JumpToggle.Size = UDim2.new(0.12, 0, 0.6, 0)
-JumpToggle.Position = UDim2.new(0.86, 0, 0.2, 0)
+JumpToggle.Position = UDim2.new(0.82, 0, 0.2, 0)
 JumpToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
 JumpToggle.BackgroundTransparency = 0.15
 JumpToggle.BorderSizePixel = 0
 JumpToggle.Text = "OFF"
 JumpToggle.TextColor3 = Color3.fromRGB(200, 200, 200)
-JumpToggle.TextSize = 11
+JumpToggle.TextSize = 12
 JumpToggle.Font = Enum.Font.GothamBold
 JumpToggle.Parent = Row1
 local JumpToggleCorner = Instance.new("UICorner")
-JumpToggleCorner.CornerRadius = UDim.new(0, 3)
+JumpToggleCorner.CornerRadius = UDim.new(0, 4)
 JumpToggleCorner.Parent = JumpToggle
 
--- Ligne 2 : Noclip + God
+-- Rangée 2 : Noclip + God + ESP
 local Row2 = Instance.new("Frame")
 Row2.Size = UDim2.new(1, 0, 0.33, 0)
 Row2.Position = UDim2.new(0, 0, 0.33, 0)
@@ -307,51 +245,51 @@ Row2.BackgroundTransparency = 1
 Row2.Parent = ControlPanel
 
 local NoclipToggle = Instance.new("TextButton")
-NoclipToggle.Size = UDim2.new(0.2, 0, 0.6, 0)
-NoclipToggle.Position = UDim2.new(0.05, 0, 0.2, 0)
+NoclipToggle.Size = UDim2.new(0.28, 0, 0.6, 0)
+NoclipToggle.Position = UDim2.new(0.03, 0, 0.2, 0)
 NoclipToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
 NoclipToggle.BackgroundTransparency = 0.15
 NoclipToggle.BorderSizePixel = 0
 NoclipToggle.Text = "🚪 Noclip OFF"
 NoclipToggle.TextColor3 = Color3.fromRGB(200, 200, 200)
-NoclipToggle.TextSize = 11
+NoclipToggle.TextSize = 12
 NoclipToggle.Font = Enum.Font.GothamBold
 NoclipToggle.Parent = Row2
 local NoclipCorner = Instance.new("UICorner")
-NoclipCorner.CornerRadius = UDim.new(0, 3)
+NoclipCorner.CornerRadius = UDim.new(0, 4)
 NoclipCorner.Parent = NoclipToggle
 
 local GodToggle = Instance.new("TextButton")
-GodToggle.Size = UDim2.new(0.2, 0, 0.6, 0)
-GodToggle.Position = UDim2.new(0.40, 0, 0.2, 0)
+GodToggle.Size = UDim2.new(0.28, 0, 0.6, 0)
+GodToggle.Position = UDim2.new(0.36, 0, 0.2, 0)
 GodToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
 GodToggle.BackgroundTransparency = 0.15
 GodToggle.BorderSizePixel = 0
 GodToggle.Text = "🛡️ God OFF"
 GodToggle.TextColor3 = Color3.fromRGB(200, 200, 200)
-GodToggle.TextSize = 11
+GodToggle.TextSize = 12
 GodToggle.Font = Enum.Font.GothamBold
 GodToggle.Parent = Row2
 local GodCorner = Instance.new("UICorner")
-GodCorner.CornerRadius = UDim.new(0, 3)
+GodCorner.CornerRadius = UDim.new(0, 4)
 GodCorner.Parent = GodToggle
 
 local ESPToggle = Instance.new("TextButton")
-ESPToggle.Size = UDim2.new(0.2, 0, 0.6, 0)
-ESPToggle.Position = UDim2.new(0.75, 0, 0.2, 0)
+ESPToggle.Size = UDim2.new(0.28, 0, 0.6, 0)
+ESPToggle.Position = UDim2.new(0.69, 0, 0.2, 0)
 ESPToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
 ESPToggle.BackgroundTransparency = 0.15
 ESPToggle.BorderSizePixel = 0
 ESPToggle.Text = "👁️ ESP OFF"
 ESPToggle.TextColor3 = Color3.fromRGB(200, 200, 200)
-ESPToggle.TextSize = 11
+ESPToggle.TextSize = 12
 ESPToggle.Font = Enum.Font.GothamBold
 ESPToggle.Parent = Row2
 local ESPCorner = Instance.new("UICorner")
-ESPCorner.CornerRadius = UDim.new(0, 3)
+ESPCorner.CornerRadius = UDim.new(0, 4)
 ESPCorner.Parent = ESPToggle
 
--- Ligne 3 : Téléportation (recherche + distance)
+-- Rangée 3 : Téléportation (recherche, distance, boutons)
 local Row3 = Instance.new("Frame")
 Row3.Size = UDim2.new(1, 0, 0.34, 0)
 Row3.Position = UDim2.new(0, 0, 0.66, 0)
@@ -359,7 +297,7 @@ Row3.BackgroundTransparency = 1
 Row3.Parent = ControlPanel
 
 local SearchBox = Instance.new("TextBox")
-SearchBox.Size = UDim2.new(0.35, 0, 0.6, 0)
+SearchBox.Size = UDim2.new(0.28, 0, 0.6, 0)
 SearchBox.Position = UDim2.new(0.02, 0, 0.2, 0)
 SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
 SearchBox.BackgroundTransparency = 0.15
@@ -368,142 +306,94 @@ SearchBox.BorderColor3 = Color3.fromRGB(70, 70, 90)
 SearchBox.Text = ""
 SearchBox.PlaceholderText = "🔍 Joueur..."
 SearchBox.TextColor3 = Color3.fromRGB(220, 220, 240)
-SearchBox.TextSize = 11
+SearchBox.TextSize = 12
 SearchBox.TextXAlignment = Enum.TextXAlignment.Left
 SearchBox.Font = Enum.Font.GothamMedium
 SearchBox.ClearTextOnFocus = true
 SearchBox.Parent = Row3
 local SearchCorner = Instance.new("UICorner")
-SearchCorner.CornerRadius = UDim.new(0, 3)
+SearchCorner.CornerRadius = UDim.new(0, 4)
 SearchCorner.Parent = SearchBox
 
 local DistanceLabel = Instance.new("TextLabel")
-DistanceLabel.Size = UDim2.new(0.2, 0, 1, 0)
-DistanceLabel.Position = UDim2.new(0.40, 0, 0, 0)
+DistanceLabel.Size = UDim2.new(0.15, 0, 1, 0)
+DistanceLabel.Position = UDim2.new(0.32, 0, 0, 0)
 DistanceLabel.BackgroundTransparency = 1
 DistanceLabel.Text = "📏 0.0"
 DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-DistanceLabel.TextSize = 11
+DistanceLabel.TextSize = 12
 DistanceLabel.TextXAlignment = Enum.TextXAlignment.Left
 DistanceLabel.Font = Enum.Font.GothamMedium
 DistanceLabel.Parent = Row3
 
 local DistanceBox = Instance.new("TextBox")
 DistanceBox.Size = UDim2.new(0.08, 0, 0.6, 0)
-DistanceBox.Position = UDim2.new(0.60, 0, 0.2, 0)
+DistanceBox.Position = UDim2.new(0.47, 0, 0.2, 0)
 DistanceBox.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
 DistanceBox.BackgroundTransparency = 0.15
 DistanceBox.BorderSizePixel = 1
 DistanceBox.BorderColor3 = Color3.fromRGB(70, 70, 90)
 DistanceBox.Text = "0"
 DistanceBox.TextColor3 = Color3.fromRGB(220, 220, 240)
-DistanceBox.TextSize = 11
+DistanceBox.TextSize = 12
 DistanceBox.TextXAlignment = Enum.TextXAlignment.Center
 DistanceBox.Font = Enum.Font.GothamMedium
 DistanceBox.ClearTextOnFocus = false
 DistanceBox.Parent = Row3
 local DistCorner = Instance.new("UICorner")
-DistCorner.CornerRadius = UDim.new(0, 3)
+DistCorner.CornerRadius = UDim.new(0, 4)
 DistCorner.Parent = DistanceBox
 
 local TeleportOnce = Instance.new("TextButton")
-TeleportOnce.Size = UDim2.new(0.15, 0, 0.6, 0)
-TeleportOnce.Position = UDim2.new(0.72, 0, 0.2, 0)
+TeleportOnce.Size = UDim2.new(0.18, 0, 0.6, 0)
+TeleportOnce.Position = UDim2.new(0.58, 0, 0.2, 0)
 TeleportOnce.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
 TeleportOnce.BackgroundTransparency = 0.15
 TeleportOnce.BorderSizePixel = 0
-TeleportOnce.Text = "▶1"
+TeleportOnce.Text = "▶ Tp 1x"
 TeleportOnce.TextColor3 = Color3.fromRGB(180, 220, 255)
-TeleportOnce.TextSize = 11
+TeleportOnce.TextSize = 12
 TeleportOnce.Font = Enum.Font.GothamBold
 TeleportOnce.Parent = Row3
 local TeleportOnceCorner = Instance.new("UICorner")
-TeleportOnceCorner.CornerRadius = UDim.new(0, 3)
+TeleportOnceCorner.CornerRadius = UDim.new(0, 4)
 TeleportOnceCorner.Parent = TeleportOnce
 
 local TeleportCont = Instance.new("TextButton")
-TeleportCont.Size = UDim2.new(0.15, 0, 0.6, 0)
-TeleportCont.Position = UDim2.new(0.88, 0, 0.2, 0)
+TeleportCont.Size = UDim2.new(0.18, 0, 0.6, 0)
+TeleportCont.Position = UDim2.new(0.78, 0, 0.2, 0)
 TeleportCont.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
 TeleportCont.BackgroundTransparency = 0.15
 TeleportCont.BorderSizePixel = 0
 TeleportCont.Text = "🔁 OFF"
 TeleportCont.TextColor3 = Color3.fromRGB(200, 200, 200)
-TeleportCont.TextSize = 11
+TeleportCont.TextSize = 12
 TeleportCont.Font = Enum.Font.GothamBold
 TeleportCont.Parent = Row3
 local TeleportContCorner = Instance.new("UICorner")
-TeleportContCorner.CornerRadius = UDim.new(0, 3)
+TeleportContCorner.CornerRadius = UDim.new(0, 4)
 TeleportContCorner.Parent = TeleportCont
 
--- ===== Liste des joueurs (pour téléportation) =====
+-- ===== Liste des joueurs (sélection, pas téléportation directe) =====
 local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Size = UDim2.new(1, 0, 0.62, 0)
-ScrollFrame.Position = UDim2.new(0, 0, 0.38, 0)
+ScrollFrame.Size = UDim2.new(1, 0, 0.60, 0)
+ScrollFrame.Position = UDim2.new(0, 0, 0.40, 0)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-ScrollFrame.ScrollBarThickness = 4
+ScrollFrame.ScrollBarThickness = 6
 ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
 ScrollFrame.Parent = ContentContainer
 
 local PlayerList = Instance.new("UIListLayout")
-PlayerList.Padding = UDim.new(0, 4)
+PlayerList.Padding = UDim.new(0, 6)
 PlayerList.SortOrder = Enum.SortOrder.LayoutOrder
 PlayerList.Parent = ScrollFrame
 
--- ===== Variables de déplacement =====
-local Dragging = false
-local DragStart = nil
-local StartPos = nil
+-- Variables pour suivre la sélection
+local selectedItem = nil  -- pour le surlignage
 
--- ===== Mode réduit =====
-local IsMinimized = false
-local MinimizedSize = 32
-local FullSize = {Width = 0, Height = 0}
-local SavedPosition = nil
-
--- ===== Bouton flottant =====
-local FloatButton = Instance.new("ImageButton")
-FloatButton.Size = UDim2.new(0, 40, 0, 40)
-FloatButton.Position = UDim2.new(0.5, -20, 0.02, 0)
-FloatButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-FloatButton.BackgroundTransparency = 0.2
-FloatButton.BorderSizePixel = 1
-FloatButton.BorderColor3 = Color3.fromRGB(60, 60, 70)
-FloatButton.Image = "rbxassetid://7072718680"
-FloatButton.ImageColor3 = Color3.fromRGB(200, 200, 220)
-FloatButton.Visible = false
-FloatButton.Parent = ScreenGui
-
-local FloatCorner = Instance.new("UICorner")
-FloatCorner.CornerRadius = UDim.new(0, 10)
-FloatCorner.Parent = FloatButton
-
-local FloatLabel = Instance.new("TextLabel")
-FloatLabel.Size = UDim2.new(1, 0, 0.6, 0)
-FloatLabel.Position = UDim2.new(0, 0, 0.6, 0)
-FloatLabel.BackgroundTransparency = 1
-FloatLabel.Text = "⚙️"
-FloatLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
-FloatLabel.TextSize = 14
-FloatLabel.Font = Enum.Font.GothamBold
-FloatLabel.Parent = FloatButton
-
-FloatButton.MouseEnter:Connect(function()
-    TweenService:Create(FloatButton, TweenInfo.new(0.2), {
-        Size = UDim2.new(0, 44, 0, 44),
-        BackgroundTransparency = 0.05
-    }):Play()
-end)
-FloatButton.MouseLeave:Connect(function()
-    TweenService:Create(FloatButton, TweenInfo.new(0.2), {
-        Size = UDim2.new(0, 40, 0, 40),
-        BackgroundTransparency = 0.2
-    }):Play()
-end)
-
--- ===== Gestion du slider de distance =====
+-- ===== Gestion de la distance =====
 local MIN_DISTANCE = -50
 local MAX_DISTANCE = 50
 local currentDistance = 0
@@ -518,9 +408,6 @@ local function UpdateDistanceDisplay(value)
     state.teleportDistance = value
 end
 
--- On va ajouter un slider (simplifié) : on utilise directement la DistanceBox (saisie) et on peut aussi faire un slider mais on s'inspire de l'exemple.
--- On va utiliser les événements de la DistanceBox
-
 DistanceBox.FocusLost:Connect(function()
     local val = tonumber(DistanceBox.Text)
     if val then
@@ -531,16 +418,22 @@ DistanceBox.FocusLost:Connect(function()
         DistanceBox.Text = string.format("%.1f", currentDistance)
     end
 end)
-
 UpdateDistanceDisplay(0)
 
--- ===== Gestion de la téléportation =====
+-- ===== Fonctions de téléportation =====
 local function teleportToPlayer(player, distance)
-    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
-    local targetHRP = player.Character.HumanoidRootPart
-    local localHRP = Character and Character:FindFirstChild("HumanoidRootPart")
+    if not player then
+        warn("Aucun joueur sélectionné")
+        return
+    end
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        warn("Joueur sans personnage")
+        return
+    end
+    local char, _ = getCharacter()
+    local localHRP = char:FindFirstChild("HumanoidRootPart")
     if not localHRP then return end
-    local targetPos = targetHRP.Position
+    local targetPos = player.Character.HumanoidRootPart.Position
     local teleportPos = Vector3.new(targetPos.X, targetPos.Y - 3.5 + (distance or 0), targetPos.Z)
     localHRP.CFrame = CFrame.new(teleportPos)
 end
@@ -548,17 +441,19 @@ end
 local function startContinuousTeleport(player)
     if teleportConnection then teleportConnection:Disconnect() end
     state.teleportContinuous = true
-    state.teleportTarget = player
     teleportConnection = RunService.Heartbeat:Connect(function()
-        if not state.teleportContinuous or not state.teleportTarget then
+        if not state.teleportContinuous then
             stopContinuousTeleport()
             return
         end
-        if not state.teleportTarget.Character or not state.teleportTarget.Character:FindFirstChild("HumanoidRootPart") then
+        if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
             return
         end
-        teleportToPlayer(state.teleportTarget, state.teleportDistance)
+        teleportToPlayer(player, state.teleportDistance)
     end)
+    TeleportCont.Text = "🔁 ON"
+    TeleportCont.BackgroundColor3 = Color3.fromRGB(70, 170, 70)
+    TeleportCont.TextColor3 = Color3.fromRGB(220, 255, 220)
 end
 
 local function stopContinuousTeleport()
@@ -567,17 +462,16 @@ local function stopContinuousTeleport()
         teleportConnection = nil
     end
     state.teleportContinuous = false
-    state.teleportTarget = nil
     TeleportCont.Text = "🔁 OFF"
     TeleportCont.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
     TeleportCont.TextColor3 = Color3.fromRGB(200, 200, 200)
 end
 
--- ===== Gestion des boutons de téléportation dans la liste =====
+-- ===== Création d'un élément joueur (sélection uniquement) =====
 local function CreatePlayerItem(player, index)
     local ItemFrame = Instance.new("Frame")
     ItemFrame.Name = "PlayerItem_" .. index
-    ItemFrame.Size = UDim2.new(1, -0.02, 0, 40)
+    ItemFrame.Size = UDim2.new(1, -0.02, 0, 36)  -- hauteur un peu plus grande
     ItemFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     ItemFrame.BackgroundTransparency = 0.15
     ItemFrame.BorderSizePixel = 1
@@ -590,8 +484,8 @@ local function CreatePlayerItem(player, index)
 
     -- Avatar
     local AvatarImage = Instance.new("ImageLabel")
-    AvatarImage.Size = UDim2.new(0, 30, 0, 30)
-    AvatarImage.Position = UDim2.new(0.02, 0, 0.5, -15)
+    AvatarImage.Size = UDim2.new(0, 28, 0, 28)
+    AvatarImage.Position = UDim2.new(0.02, 0, 0.5, -14)
     AvatarImage.BackgroundTransparency = 1
     local thumbUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. player.UserId .. "&width=100&height=100&format=png"
     AvatarImage.Image = thumbUrl
@@ -600,7 +494,7 @@ local function CreatePlayerItem(player, index)
     -- Pseudo
     local PlayerName = Instance.new("TextLabel")
     PlayerName.Name = "PlayerName"
-    PlayerName.Size = UDim2.new(0.5, 0, 1, 0)
+    PlayerName.Size = UDim2.new(0.7, 0, 1, 0)
     PlayerName.Position = UDim2.new(0.12, 0, 0, 0)
     PlayerName.BackgroundTransparency = 1
     PlayerName.Text = player.DisplayName .. " (" .. player.Name .. ")"
@@ -610,50 +504,20 @@ local function CreatePlayerItem(player, index)
     PlayerName.Font = Enum.Font.GothamMedium
     PlayerName.Parent = ItemFrame
 
-    -- Bouton Téléporter
-    local TeleportBtn = Instance.new("TextButton")
-    TeleportBtn.Name = "TeleportBtn"
-    TeleportBtn.Size = UDim2.new(0.2, 0, 0.7, 0)
-    TeleportBtn.Position = UDim2.new(0.75, 0, 0.15, 0)
-    TeleportBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
-    TeleportBtn.BackgroundTransparency = 0.15
-    TeleportBtn.BorderSizePixel = 0
-    TeleportBtn.Text = "▶ Télé"
-    TeleportBtn.TextColor3 = Color3.fromRGB(180, 220, 255)
-    TeleportBtn.TextSize = 10
-    TeleportBtn.TextScaled = true
-    TeleportBtn.Font = Enum.Font.GothamBold
-    TeleportBtn.Parent = ItemFrame
-    local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 4)
-    BtnCorner.Parent = TeleportBtn
-
-    TeleportBtn.MouseButton1Click:Connect(function()
-        if state.teleportContinuous and state.teleportTarget == player then
-            stopContinuousTeleport()
-        else
-            -- Téléportation une fois
-            teleportToPlayer(player, state.teleportDistance)
-            -- Si le toggle continu est activé, on le démarre
-            if state.teleportContinuous then
-                -- On arrête l'ancien et on démarre avec ce joueur
-                stopContinuousTeleport()
-                startContinuousTeleport(player)
-            else
-                -- Sinon on fait juste une fois
-                -- on peut afficher un feedback
-            end
+    -- Sélection au clic
+    ItemFrame.MouseButton1Click:Connect(function()
+        -- Désélectionner l'ancien
+        if selectedItem then
+            selectedItem.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+            selectedItem.BackgroundTransparency = 0.15
         end
-        -- Mettre à jour l'état du bouton continu (le bouton dans Row3) manuellement
-        if state.teleportContinuous then
-            TeleportCont.Text = "🔁 ON"
-            TeleportCont.BackgroundColor3 = Color3.fromRGB(70, 170, 70)
-            TeleportCont.TextColor3 = Color3.fromRGB(220, 255, 220)
-        else
-            TeleportCont.Text = "🔁 OFF"
-            TeleportCont.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-            TeleportCont.TextColor3 = Color3.fromRGB(200, 200, 200)
-        end
+        -- Sélectionner le nouveau
+        ItemFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+        ItemFrame.BackgroundTransparency = 0.1
+        selectedItem = ItemFrame
+        state.selectedPlayer = player
+        -- Mettre à jour la barre de recherche
+        SearchBox.Text = player.DisplayName
     end)
 
     return ItemFrame
@@ -693,7 +557,26 @@ local function RefreshPlayerList(filterText)
         CreatePlayerItem(player, i)
     end
 
-    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#playerList * 44) + 10)
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#playerList * 42) + 10)
+
+    -- Réinitialiser la sélection si le joueur sélectionné n'est plus dans la liste
+    if state.selectedPlayer then
+        local found = false
+        for _, p in ipairs(playerList) do
+            if p == state.selectedPlayer then
+                found = true
+                break
+            end
+        end
+        if not found then
+            state.selectedPlayer = nil
+            if selectedItem then
+                selectedItem.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+                selectedItem.BackgroundTransparency = 0.15
+                selectedItem = nil
+            end
+        end
+    end
 end
 
 SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -704,7 +587,7 @@ RefreshPlayerList("")
 Players.PlayerAdded:Connect(function() RefreshPlayerList(SearchBox.Text) end)
 Players.PlayerRemoving:Connect(function() RefreshPlayerList(SearchBox.Text) end)
 
--- ===== Gestion des toggles (Speed, Jump, Noclip, God, ESP) =====
+-- ===== Gestion des toggles =====
 local speedState = false
 local jumpState = false
 local noclipState = false
@@ -726,7 +609,6 @@ SpeedToggle.MouseButton1Click:Connect(function()
         Humanoid.WalkSpeed = 16
     end
 end)
-
 SpeedBox.FocusLost:Connect(function()
     if speedState then
         local val = tonumber(SpeedBox.Text) or 16
@@ -750,7 +632,6 @@ JumpToggle.MouseButton1Click:Connect(function()
         Humanoid.JumpPower = 50
     end
 end)
-
 JumpBox.FocusLost:Connect(function()
     if jumpState then
         local val = tonumber(JumpBox.Text) or 50
@@ -793,67 +674,24 @@ ESPToggle.MouseButton1Click:Connect(function()
     refreshESP()
 end)
 
--- Téléportation continue (bouton dans Row3)
+-- ===== Téléportation : boutons =====
+TeleportOnce.MouseButton1Click:Connect(function()
+    if not state.selectedPlayer then
+        warn("Aucun joueur sélectionné")
+        return
+    end
+    teleportToPlayer(state.selectedPlayer, state.teleportDistance)
+end)
+
 TeleportCont.MouseButton1Click:Connect(function()
     if state.teleportContinuous then
         stopContinuousTeleport()
     else
-        -- On démarre avec le joueur sélectionné dans la recherche (ou on prend le premier de la liste)
-        local targetName = SearchBox.Text
-        local target = nil
-        if targetName ~= "" then
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and (string.lower(p.DisplayName) == string.lower(targetName) or string.lower(p.Name) == string.lower(targetName)) then
-                    target = p
-                    break
-                end
-            end
+        if not state.selectedPlayer then
+            warn("Aucun joueur sélectionné")
+            return
         end
-        if not target then
-            -- prendre le premier joueur de la liste
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer then
-                    target = p
-                    break
-                end
-            end
-        end
-        if target then
-            startContinuousTeleport(target)
-            TeleportCont.Text = "🔁 ON"
-            TeleportCont.BackgroundColor3 = Color3.fromRGB(70, 170, 70)
-            TeleportCont.TextColor3 = Color3.fromRGB(220, 255, 220)
-        else
-            warn("Aucun joueur trouvé pour la téléportation continue")
-        end
-    end
-end)
-
--- Téléportation une fois
-TeleportOnce.MouseButton1Click:Connect(function()
-    local targetName = SearchBox.Text
-    local target = nil
-    if targetName ~= "" then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and (string.lower(p.DisplayName) == string.lower(targetName) or string.lower(p.Name) == string.lower(targetName)) then
-                target = p
-                break
-            end
-        end
-    end
-    if not target then
-        -- prendre le premier joueur de la liste
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer then
-                target = p
-                break
-            end
-        end
-    end
-    if target then
-        teleportToPlayer(target, state.teleportDistance)
-    else
-        warn("Aucun joueur trouvé")
+        startContinuousTeleport(state.selectedPlayer)
     end
 end)
 
@@ -893,7 +731,7 @@ local function setupJump()
 end
 setupJump()
 
--- Gestion du vol en continu (déplacements)
+-- Gestion du vol en continu
 RunService.Heartbeat:Connect(function()
     if state.fly then
         local torso = getTorso()
@@ -948,7 +786,6 @@ function addESPForPlayer(player)
     local function onCharAdded(char)
         wait(0.2)
         if not state.espToggle then return end
-        -- Highlight
         local highlight = Instance.new("Highlight")
         highlight.FillColor = Color3.fromRGB(255, 50, 50)
         highlight.FillTransparency = 0.5
@@ -959,7 +796,6 @@ function addESPForPlayer(player)
         highlight.Parent = char
         espData.highlights[player] = highlight
 
-        -- Billboard
         local bill = Instance.new("BillboardGui")
         bill.Size = UDim2.new(0, 150, 0, 30)
         bill.Adornee = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
@@ -1032,122 +868,16 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 end)
 
--- ===== GESTION MINIMISER / FERMER =====
-local function ToggleMinimize()
-    IsMinimized = not IsMinimized
-    if IsMinimized then
-        FullSize.Width = MainFrame.Size.X.Offset
-        FullSize.Height = MainFrame.Size.Y.Offset
-        local targetWidth = math.min(160, MainFrame.Size.X.Offset)
-        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-            Size = UDim2.new(0, targetWidth, 0, MinimizedSize)
-        }):Play()
-        ContentContainer.Visible = false
-        Title.Text = "⚙️ ▼"
-        MinimizeButton.Text = "+"
-    else
-        TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-            Size = UDim2.new(0, FullSize.Width, 0, FullSize.Height)
-        }):Play()
-        task.wait(0.3)
-        ContentContainer.Visible = true
-        Title.Text = "⚙️ Menu Ultime"
-        MinimizeButton.Text = "−"
-    end
-end
-
-local function DestroyGUI()
-    if state.teleportContinuous then stopContinuousTeleport() end
-    if flyBodyVelocity then flyBodyVelocity:Destroy() end
-    for plr, _ in pairs(espData.highlights) do
-        removeESPForPlayer(plr)
-    end
-    ScreenGui:Destroy()
-end
-
-local function ShowMainFrame()
-    MainFrame.Visible = true
-    FloatButton.Visible = false
-    if SavedPosition then MainFrame.Position = SavedPosition end
-    if IsMinimized then
-        MinimizeButton.Text = "+"
-        Title.Text = "⚙️ ▼"
-        ContentContainer.Visible = false
-    else
-        MinimizeButton.Text = "−"
-        Title.Text = "⚙️ Menu Ultime"
-        ContentContainer.Visible = true
-    end
-end
-
-local function HideMainFrame()
-    SavedPosition = MainFrame.Position
-    MainFrame.Visible = false
-    FloatButton.Visible = true
-    FloatButton.Size = UDim2.new(0, 32, 0, 32)
-    FloatButton.Position = UDim2.new(0.5, -16, 0.02, 0)
-    TweenService:Create(FloatButton, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-        Size = UDim2.new(0, 40, 0, 40),
-        Position = UDim2.new(0.5, -20, 0.02, 0)
-    }):Play()
-end
-
--- Déplacement (comme dans l'exemple)
-local function StartDrag(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        Dragging = true
-        DragStart = input.Position
-        StartPos = MainFrame.Position
-    end
-end
-local function UpdateDrag(input)
-    if Dragging then
-        local delta = input.Position - DragStart
-        MainFrame.Position = UDim2.new(
-            StartPos.X.Scale,
-            StartPos.X.Offset + delta.X,
-            StartPos.Y.Scale,
-            StartPos.Y.Offset + delta.Y
-        )
-    end
-end
-local function EndDrag()
-    Dragging = false
-end
-
-TitleBar.InputBegan:Connect(StartDrag)
-TitleBar.InputChanged:Connect(UpdateDrag)
-TitleBar.InputEnded:Connect(EndDrag)
-
-MinimizeButton.MouseButton1Click:Connect(ToggleMinimize)
-CloseButton.MouseButton1Click:Connect(DestroyGUI)
-FloatButton.MouseButton1Click:Connect(ShowMainFrame)
-
-ShowMainFrame()
-
--- Réattacher si détruit
-ScreenGui.AncestryChanged:Connect(function()
-    if not ScreenGui.Parent then
-        task.wait(1)
-        if not ScreenGui.Parent then
-            ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-        end
-    end
-end)
-
--- Redimensionnement adaptatif
+-- ===== Redimensionnement adaptatif =====
 RunService.RenderStepped:Connect(function()
     local currentSize = workspace.CurrentCamera.ViewportSize
     local isNowSmall = currentSize.X < 600
     if isNowSmall ~= IsSmallScreen then
         IsSmallScreen = isNowSmall
         IsMobile = UserInputService.TouchEnabled
-        if FloatButton.Visible then
-            FloatButton.Position = UDim2.new(0.5, -20, 0.02, 0)
-        end
         UpdateMainFrame()
         RefreshPlayerList(SearchBox.Text)
     end
 end)
 
-print("✅ Menu Ultime chargé avec succès ! (inspiré de votre exemple)")
+print("✅ Script Ultime chargé – UI sans réduction/fermeture, sélection de joueur fonctionnelle.")
