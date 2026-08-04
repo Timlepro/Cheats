@@ -569,7 +569,7 @@ local function CreatePlayerItem(player, index)
     -- Pseudo avec TextScaled, plus large
     local PlayerName = Instance.new("TextLabel")
     PlayerName.Name = "PlayerName"
-    PlayerName.Size = UDim2.new(0.50, 0, 1, 0)
+    PlayerName.Size = UDim2.new(0.48, 0, 1, 0)   -- réduit pour laisser plus de place au bouton
     PlayerName.Position = UDim2.new(0.13, 0, 0, 0)
     PlayerName.BackgroundTransparency = 1
     PlayerName.Text = player.DisplayName .. " (@" .. player.Name .. ")"
@@ -579,11 +579,11 @@ local function CreatePlayerItem(player, index)
     PlayerName.Font = Enum.Font.GothamMedium
     PlayerName.Parent = ItemFrame
 
-    -- Bouton Téléporter (agrandi de 10% par rapport à avant)
+    -- Bouton Téléporter (agrandi et avec TextScaled)
     local TeleportButton = Instance.new("TextButton")
     TeleportButton.Name = "TeleportButton"
-    TeleportButton.Size = UDim2.new(0.24, 0, 0.7, 0)   -- 24% de large (au lieu de 22%)
-    TeleportButton.Position = UDim2.new(0.74, 0, 0.15, 0)
+    TeleportButton.Size = UDim2.new(0.26, 0, 0.7, 0)   -- 26% de large (au lieu de 24%)
+    TeleportButton.Position = UDim2.new(0.72, 0, 0.15, 0) -- décalé pour garder la marge
     TeleportButton.BackgroundColor3 = Color3.fromRGB(40, 120, 200)
     TeleportButton.BackgroundTransparency = 0.15
     TeleportButton.BorderSizePixel = 0
@@ -591,6 +591,7 @@ local function CreatePlayerItem(player, index)
     TeleportButton.TextColor3 = Color3.fromRGB(180, 220, 255)
     TeleportButton.TextSize = 11
     TeleportButton.Font = Enum.Font.GothamBold
+    TeleportButton.TextScaled = true   -- permet d'adapter automatiquement la taille
     TeleportButton.Parent = ItemFrame
     TeleportButton.AutoButtonColor = false
 
@@ -617,11 +618,11 @@ local function CreatePlayerItem(player, index)
         pcall(function()
             -- Animation clic
             TweenService:Create(TeleportButton, TweenInfo.new(0.1), {
-                Size = UDim2.new(0.22, 0, 0.65, 0)
+                Size = UDim2.new(0.24, 0, 0.65, 0)
             }):Play()
             task.wait(0.1)
             TweenService:Create(TeleportButton, TweenInfo.new(0.1), {
-                Size = UDim2.new(0.24, 0, 0.7, 0)
+                Size = UDim2.new(0.26, 0, 0.7, 0)
             }):Play()
 
             if InfiniteTeleport.Active and InfiniteTeleport.TargetPlayer == player then
@@ -805,5 +806,3 @@ RunService.RenderStepped:Connect(function()
         RefreshPlayerList(SearchBox.Text)
     end
 end)
-
-print("✅ Player Teleport GUI chargé – version compacte, avatar visible, bouton complet.")
