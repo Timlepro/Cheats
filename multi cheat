@@ -1,9 +1,10 @@
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+
+local LocalPlayer = Players.LocalPlayer
 
 local Scripts = {
     {
@@ -44,136 +45,197 @@ local Scripts = {
     },
 }
 
--- ===== GESTION DES PRÉFÉRENCES =====
 local configFile = "ScriptExecutor_Config.json"
 
+local START_MINIMIZED = true
+local FLOAT_BUTTON_SIZE = 50
+local FLOAT_MARGIN = 8
+local FLOAT_DRAG_DISTANCE = 6
+
 local CurrentPlaceId = game.PlaceId
-local ExecutedScripts = {}
+
 local ScriptToggles = {}
+local ExecutedScripts = {}
+local ExecutingScripts = {}
+
+local ScreenGui = nil
+local MainFrame = nil
+local TitleBar = nil
+local ScrollFrame = nil
+local FloatButton = nil
+
+local SavedFloatPosition = nil
+local CurrentFloatNormalized = nil
+
+local ShowWindow
+local MinimizeWindow
+local CloseWindow
+local ApplyLoadedFloatPosition
+local UpdateAllScriptVisuals
 
 for i = 1, #Scripts do
     ScriptToggles[i] = false
+    ExecutedScripts[i] = false
+    ExecutingScripts[i] = false
 end
 
-local FloatButton = nil
-local TitleBar = nil
-local MainFrame = nil
-local ScrollFrame = nil
-local ScreenGui = nil
+local function GetViewportSize()
+    local camera = workspace.CurrentCamera
+
+    if camera and camera.ViewportSize.X > 0 and camera.ViewportSize.Y > 0 then
+        return camera.ViewportSize
+    end
+
+    return Vector2.new(1920, 1080)
+end
+
+local function CanUseFiles()
+    return type(isfile) == "function"
+        and type(readfile) == "function"
+        and type(writefile) == "function"
+end
+
+local function GetTableValue(data, index)
+    if type(data) ~= "table" then
+        return nil
+    end
+
+    if data[index] ~= nil then
+        return data[index]
+    end
+
+    return data[tostring(index)]
+end
+
+local function LoadConfigData()
+    for i = 1, #Scripts do
+        ScriptToggles[i] = false
+
+        -- Ne jamais charger l'ancien état "exécuté".
+        -- Chaque nouveau lancement doit pouvoir auto-exécuter les scripts.
+        ExecutedScripts[i] = false
+        ExecutingScripts[i] = false
+    end
+
+    SavedFloatPosition = nil
+
+    if not CanUseFiles() then
+        return false
+    end
+
+    local fileExistsSuccess, fileExists = pcall(function()
+        return isfile(configFile)
+    end)
+
+    if not fileExistsSuccess or not fileExists then
+        return false
+    end
+
+    local readSuccess, jsonData = pcall(function()
+        return readfile(configFile)
+    end)
+
+    if not readSuccess or type(jsonData) ~= "string" or jsonData == "" then
+        return false
+    end
+
+    local decodeSuccess, decodedData = pcall(function()
+        return HttpService:JSONDecode(jsonData)
+    end)
+
+    if not decodeSuccess or type(decodedData) ~= "table" then
+        return false
+    end
+
+    if type(decodedData.Toggles) == "table" then
+        for i = 1, #Scripts do
+            local savedToggle = GetTableValue(decodedData.Toggles, i)
+
+            if type(savedToggle) == "boolean" then
+                ScriptToggles[i] = savedToggle
+            end
+        end
+    end
+
+    if type(decodedData.FloatPosition) == "table" then
+        SavedFloatPosition = decodedData.FloatPosition
+    end
+
+    return true
+end
 
 local function SaveToggles()
+    if not CanUseFiles() then
+        return false
+    end
+
     local data = {
+        Version = 2,
         Toggles = {},
-        ExecutedScripts = {},
         FloatPosition = {}
     }
-    
+
     for i = 1, #Scripts do
-        data.Toggles[i] = ScriptToggles[i] or false
+        data.Toggles[i] = ScriptToggles[i] == true
     end
-    
-    for i = 1, #Scripts do
-        data.ExecutedScripts[i] = ExecutedScripts[i] or false
-    end
-    
-    if FloatButton then
+
+    if CurrentFloatNormalized then
         data.FloatPosition = {
-            X = FloatButton.Position.X.Scale or 0.5,
-            XOffset = FloatButton.Position.X.Offset or -25,
-            Y = FloatButton.Position.Y.Scale or 0.02,
-            YOffset = FloatButton.Position.Y.Offset or 0
+            CenterX = CurrentFloatNormalized.X,
+            CenterY = CurrentFloatNormalized.Y
         }
     else
         data.FloatPosition = {
-            X = 0.5,
-            XOffset = -25,
-            Y = 0.02,
-            YOffset = 0
+            CenterX = 0.5,
+            CenterY = 0.05
         }
     end
-    
-    local jsonData = HttpService:JSONEncode(data)
-    
-    pcall(function()
+
+    local encodeSuccess, jsonData = pcall(function()
+        return HttpService:JSONEncode(data)
+    end)
+
+    if not encodeSuccess then
+        return false
+    end
+
+    local writeSuccess = pcall(function()
         writefile(configFile, jsonData)
     end)
+
+    return writeSuccess
 end
 
-local function LoadToggles()
-    if not isfile(configFile) then
-        SaveToggles()
-        return
-    end
+LoadConfigData()
 
-    local jsonData = nil
-    local success, data = pcall(function()
-        return readfile(configFile)
-    end)
-    
-    if not success then
-        SaveToggles()
-        return
-    end
-    
-    jsonData = data
-    
-    local decodedData = nil
-    local decodeSuccess, result = pcall(function()
-        return HttpService:JSONDecode(jsonData)
-    end)
-    
-    if not decodeSuccess then
-        SaveToggles()
-        return
-    end
-    
-    decodedData = result
-    
-    if decodedData.Toggles then
-        for i = 1, #Scripts do
-            if decodedData.Toggles[i] ~= nil then
-                ScriptToggles[i] = decodedData.Toggles[i]
-            end
-        end
-    end
-    
-    if decodedData.ExecutedScripts then
-        for i = 1, #Scripts do
-            if decodedData.ExecutedScripts[i] ~= nil then
-                ExecutedScripts[i] = decodedData.ExecutedScripts[i]
-            end
-        end
-    end
-    
-    if decodedData.FloatPosition and FloatButton then
-        FloatButton.Position = UDim2.new(
-            decodedData.FloatPosition.X or 0.5,
-            decodedData.FloatPosition.XOffset or -25,
-            decodedData.FloatPosition.Y or 0.02,
-            decodedData.FloatPosition.YOffset or 0
-        )
-    end
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local oldGui = PlayerGui:FindFirstChild("ScriptExecutorGUI")
+
+if oldGui then
+    oldGui:Destroy()
 end
 
 ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ScriptExecutorGUI"
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
 
 local IsMobile = UserInputService.TouchEnabled
-local IsSmallScreen = workspace.CurrentCamera.ViewportSize.X < 600
+local IsSmallScreen = GetViewportSize().X < 600
 
 local function GetAdaptiveSize()
-    local screenSize = workspace.CurrentCamera.ViewportSize
+    local screenSize = GetViewportSize()
+
     local width = math.min(420, screenSize.X * 0.9)
     local height = math.min(600, screenSize.Y * 0.85)
-    
+
     if IsMobile or IsSmallScreen then
         width = math.min(370, screenSize.X * 0.92)
         height = math.min(550, screenSize.Y * 0.8)
     end
-    
+
     return width, height
 end
 
@@ -181,6 +243,7 @@ local function GetAdaptiveFontSize()
     if IsMobile or IsSmallScreen then
         return 13
     end
+
     return 17
 end
 
@@ -188,6 +251,7 @@ local function GetAdaptiveButtonSize()
     if IsMobile or IsSmallScreen then
         return 60, 26
     end
+
     return 70, 30
 end
 
@@ -198,15 +262,22 @@ MainFrame.BackgroundTransparency = 0.95
 MainFrame.BorderSizePixel = 1
 MainFrame.BorderColor3 = Color3.fromRGB(60, 60, 70)
 MainFrame.ClipsDescendants = true
-MainFrame.Parent = ScreenGui
-MainFrame.Visible = true
+MainFrame.Visible = not START_MINIMIZED
 MainFrame.ZIndex = 10
+MainFrame.Parent = ScreenGui
 
 local function UpdateMainFrameSize()
     local width, height = GetAdaptiveSize()
+
     MainFrame.Size = UDim2.new(0, width, 0, height)
-    MainFrame.Position = UDim2.new(0.5, -width/2, 0.5, -height/2)
+    MainFrame.Position = UDim2.new(
+        0.5,
+        -width / 2,
+        0.5,
+        -height / 2
+    )
 end
+
 UpdateMainFrameSize()
 
 local GlassEffect = Instance.new("Frame")
@@ -215,8 +286,8 @@ GlassEffect.Size = UDim2.new(1, 0, 1, 0)
 GlassEffect.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 GlassEffect.BackgroundTransparency = 0.3
 GlassEffect.BorderSizePixel = 0
-GlassEffect.Parent = MainFrame
 GlassEffect.ZIndex = 1
+GlassEffect.Parent = MainFrame
 
 local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, 10)
@@ -228,8 +299,9 @@ TitleBar.Size = UDim2.new(1, 0, 0, 45)
 TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 TitleBar.BackgroundTransparency = 0.5
 TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
+TitleBar.Active = true
 TitleBar.ZIndex = 2
+TitleBar.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 10)
@@ -237,16 +309,16 @@ TitleCorner.Parent = TitleBar
 
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.Size = UDim2.new(0.4, 0, 1, 0)
+Title.Size = UDim2.new(0.55, 0, 1, 0)
 Title.Position = UDim2.new(0.05, 0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "📁 Exécuteur de Scripts"  -- Traduit
+Title.Text = "📁 Exécuteur de Scripts"
 Title.TextColor3 = Color3.fromRGB(220, 220, 230)
 Title.TextSize = GetAdaptiveFontSize()
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Font = Enum.Font.GothamBold
-Title.Parent = TitleBar
 Title.ZIndex = 3
+Title.Parent = TitleBar
 
 local MinimizeButton = Instance.new("TextButton")
 MinimizeButton.Name = "MinimizeButton"
@@ -259,26 +331,12 @@ MinimizeButton.Text = "−"
 MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 MinimizeButton.TextSize = 22
 MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.Parent = TitleBar
 MinimizeButton.ZIndex = 3
+MinimizeButton.Parent = TitleBar
 
 local MinCorner = Instance.new("UICorner")
 MinCorner.CornerRadius = UDim.new(0, 5)
 MinCorner.Parent = MinimizeButton
-
-MinimizeButton.MouseEnter:Connect(function()
-    TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {
-        BackgroundTransparency = 0.1,
-        BackgroundColor3 = Color3.fromRGB(255, 255, 50)
-    }):Play()
-end)
-
-MinimizeButton.MouseLeave:Connect(function()
-    TweenService:Create(MinimizeButton, TweenInfo.new(0.2), {
-        BackgroundTransparency = 0.3,
-        BackgroundColor3 = Color3.fromRGB(200, 200, 50)
-    }):Play()
-end)
 
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
@@ -291,34 +349,66 @@ CloseButton.Text = "X"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.TextSize = 18
 CloseButton.Font = Enum.Font.GothamBold
-CloseButton.Parent = TitleBar
 CloseButton.ZIndex = 3
+CloseButton.Parent = TitleBar
 
 local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 5)
 CloseCorner.Parent = CloseButton
 
-CloseButton.MouseEnter:Connect(function()
-    TweenService:Create(CloseButton, TweenInfo.new(0.2), {
-        BackgroundTransparency = 0.1,
-        BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    }):Play()
-end)
+if not IsMobile then
+    MinimizeButton.MouseEnter:Connect(function()
+        TweenService:Create(
+            MinimizeButton,
+            TweenInfo.new(0.2),
+            {
+                BackgroundTransparency = 0.1,
+                BackgroundColor3 = Color3.fromRGB(255, 255, 50)
+            }
+        ):Play()
+    end)
 
-CloseButton.MouseLeave:Connect(function()
-    TweenService:Create(CloseButton, TweenInfo.new(0.2), {
-        BackgroundTransparency = 0.3,
-        BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    }):Play()
-end)
+    MinimizeButton.MouseLeave:Connect(function()
+        TweenService:Create(
+            MinimizeButton,
+            TweenInfo.new(0.2),
+            {
+                BackgroundTransparency = 0.3,
+                BackgroundColor3 = Color3.fromRGB(200, 200, 50)
+            }
+        ):Play()
+    end)
+
+    CloseButton.MouseEnter:Connect(function()
+        TweenService:Create(
+            CloseButton,
+            TweenInfo.new(0.2),
+            {
+                BackgroundTransparency = 0.1,
+                BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+            }
+        ):Play()
+    end)
+
+    CloseButton.MouseLeave:Connect(function()
+        TweenService:Create(
+            CloseButton,
+            TweenInfo.new(0.2),
+            {
+                BackgroundTransparency = 0.3,
+                BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            }
+        ):Play()
+    end)
+end
 
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Name = "ContentContainer"
 ContentContainer.Size = UDim2.new(1, 0, 1, -45)
 ContentContainer.Position = UDim2.new(0, 0, 0, 45)
 ContentContainer.BackgroundTransparency = 1
-ContentContainer.Parent = MainFrame
 ContentContainer.ZIndex = 2
+ContentContainer.Parent = MainFrame
 
 ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "ScrollFrame"
@@ -329,220 +419,515 @@ ScrollFrame.BorderSizePixel = 0
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 ScrollFrame.ScrollBarThickness = 6
 ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
-ScrollFrame.Parent = ContentContainer
 ScrollFrame.ZIndex = 2
+ScrollFrame.Parent = ContentContainer
 
 local ScriptList = Instance.new("UIListLayout")
 ScriptList.Padding = UDim.new(0, 8)
 ScriptList.SortOrder = Enum.SortOrder.LayoutOrder
 ScriptList.Parent = ScrollFrame
 
-local Dragging = false
-local DragStart = nil
-local StartPos = nil
+local MainDragging = false
+local MainDragStart = nil
+local MainStartPosition = nil
 
-local function StartDrag(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        Dragging = true
-        DragStart = input.Position
-        StartPos = MainFrame.Position
+TitleBar.InputBegan:Connect(function(input)
+    local validInput =
+        input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch
+
+    if not validInput then
+        return
     end
-end
 
-local function UpdateDrag(input)
-    if Dragging then
-        local delta = input.Position - DragStart
-        MainFrame.Position = UDim2.new(
-            StartPos.X.Scale,
-            StartPos.X.Offset + delta.X,
-            StartPos.Y.Scale,
-            StartPos.Y.Offset + delta.Y
-        )
+    MainDragging = true
+    MainDragStart = input.Position
+    MainStartPosition = MainFrame.Position
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not MainDragging or not MainDragStart or not MainStartPosition then
+        return
     end
-end
 
-local function EndDrag()
-    Dragging = false
-end
+    local validInput =
+        input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch
 
-TitleBar.InputBegan:Connect(StartDrag)
-TitleBar.InputChanged:Connect(UpdateDrag)
-TitleBar.InputEnded:Connect(EndDrag)
+    if not validInput then
+        return
+    end
+
+    local delta = input.Position - MainDragStart
+
+    MainFrame.Position = UDim2.new(
+        MainStartPosition.X.Scale,
+        MainStartPosition.X.Offset + delta.X,
+        MainStartPosition.Y.Scale,
+        MainStartPosition.Y.Offset + delta.Y
+    )
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        MainDragging = false
+    end
+end)
 
 FloatButton = Instance.new("ImageButton")
 FloatButton.Name = "FloatButton"
-FloatButton.Size = UDim2.new(0, 50, 0, 50)
-FloatButton.Position = UDim2.new(0.5, -25, 0.02, 0)
+FloatButton.Size = UDim2.new(
+    0,
+    FLOAT_BUTTON_SIZE,
+    0,
+    FLOAT_BUTTON_SIZE
+)
+FloatButton.AnchorPoint = Vector2.new(0.5, 0.5)
+FloatButton.Position = UDim2.fromOffset(
+    GetViewportSize().X / 2,
+    FLOAT_MARGIN + FLOAT_BUTTON_SIZE / 2
+)
 FloatButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 FloatButton.BackgroundTransparency = 0.2
 FloatButton.BorderSizePixel = 1
 FloatButton.BorderColor3 = Color3.fromRGB(60, 60, 70)
 FloatButton.Image = "rbxassetid://7072718680"
 FloatButton.ImageColor3 = Color3.fromRGB(200, 200, 220)
-FloatButton.Visible = false
-FloatButton.Parent = ScreenGui
+FloatButton.Visible = START_MINIMIZED
+FloatButton.Active = true
+FloatButton.AutoButtonColor = false
 FloatButton.ZIndex = 10
+FloatButton.Parent = ScreenGui
 
 local FloatCorner = Instance.new("UICorner")
 FloatCorner.CornerRadius = UDim.new(0, 12)
 FloatCorner.Parent = FloatButton
 
 local FloatLabel = Instance.new("TextLabel")
-FloatLabel.Size = UDim2.new(1, 0, 0.6, 0)
-FloatLabel.Position = UDim2.new(0, 0, 0.6, 0)
+FloatLabel.Name = "FloatLabel"
+FloatLabel.Size = UDim2.new(1, 0, 1, 0)
 FloatLabel.BackgroundTransparency = 1
 FloatLabel.Text = "📁"
 FloatLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
 FloatLabel.TextSize = 18
 FloatLabel.Font = Enum.Font.GothamBold
-FloatLabel.Parent = FloatButton
 FloatLabel.ZIndex = 11
+FloatLabel.Parent = FloatButton
 
+local function ClampFloatCenter(position)
+    local viewportSize = GetViewportSize()
+    local buttonSize = FloatButton.AbsoluteSize
+
+    local width = buttonSize.X
+
+    if width <= 0 then
+        width = FLOAT_BUTTON_SIZE
+    end
+
+    local height = buttonSize.Y
+
+    if height <= 0 then
+        height = FLOAT_BUTTON_SIZE
+    end
+
+    local halfWidth = width / 2
+    local halfHeight = height / 2
+
+    local minX = FLOAT_MARGIN + halfWidth
+    local maxX = viewportSize.X - FLOAT_MARGIN - halfWidth
+
+    local minY = FLOAT_MARGIN + halfHeight
+    local maxY = viewportSize.Y - FLOAT_MARGIN - halfHeight
+
+    if maxX < minX then
+        maxX = minX
+    end
+
+    if maxY < minY then
+        maxY = minY
+    end
+
+    return Vector2.new(
+        math.clamp(position.X, minX, maxX),
+        math.clamp(position.Y, minY, maxY)
+    )
+end
+
+local function SetFloatCenter(position)
+    local viewportSize = GetViewportSize()
+    local clampedPosition = ClampFloatCenter(position)
+
+    FloatButton.Position = UDim2.fromOffset(
+        clampedPosition.X,
+        clampedPosition.Y
+    )
+
+    CurrentFloatNormalized = Vector2.new(
+        math.clamp(clampedPosition.X / viewportSize.X, 0, 1),
+        math.clamp(clampedPosition.Y / viewportSize.Y, 0, 1)
+    )
+end
+
+ApplyLoadedFloatPosition = function()
+    local viewportSize = GetViewportSize()
+
+    if type(SavedFloatPosition) == "table" then
+        local centerX = tonumber(SavedFloatPosition.CenterX)
+        local centerY = tonumber(SavedFloatPosition.CenterY)
+
+        if centerX and centerY then
+            SetFloatCenter(Vector2.new(
+                centerX * viewportSize.X,
+                centerY * viewportSize.Y
+            ))
+
+            return
+        end
+
+        -- Compatibilité avec l'ancien fichier de sauvegarde.
+        local oldScaleX = tonumber(SavedFloatPosition.X)
+        local oldOffsetX = tonumber(SavedFloatPosition.XOffset)
+        local oldScaleY = tonumber(SavedFloatPosition.Y)
+        local oldOffsetY = tonumber(SavedFloatPosition.YOffset)
+
+        if oldScaleX and oldScaleY then
+            SetFloatCenter(Vector2.new(
+                oldScaleX * viewportSize.X
+                    + (oldOffsetX or 0)
+                    + FLOAT_BUTTON_SIZE / 2,
+
+                oldScaleY * viewportSize.Y
+                    + (oldOffsetY or 0)
+                    + FLOAT_BUTTON_SIZE / 2
+            ))
+
+            return
+        end
+    end
+
+    -- Position utilisée lorsqu'aucune position n'a encore été enregistrée.
+    SetFloatCenter(Vector2.new(
+        viewportSize.X / 2,
+        FLOAT_MARGIN + FLOAT_BUTTON_SIZE / 2
+    ))
+end
+
+ApplyLoadedFloatPosition()
+
+local FloatPressed = false
 local FloatDragging = false
 local FloatDragStart = nil
-local FloatStartPos = nil
-local FloatIsClick = false
-local FloatClickTime = 0
+local FloatStartCenter = nil
+local FloatPressTime = 0
+local FloatPressedInput = nil
 
 FloatButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        FloatIsClick = true
-        FloatClickTime = tick()
-        FloatDragging = false
-        FloatDragStart = input.Position
-        FloatStartPos = FloatButton.Position
+    local validInput =
+        input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch
+
+    if not validInput then
+        return
+    end
+
+    FloatPressed = true
+    FloatDragging = false
+    FloatDragStart = input.Position
+    FloatPressTime = tick()
+    FloatPressedInput = input
+
+    local viewportSize = GetViewportSize()
+
+    if CurrentFloatNormalized then
+        FloatStartCenter = Vector2.new(
+            CurrentFloatNormalized.X * viewportSize.X,
+            CurrentFloatNormalized.Y * viewportSize.Y
+        )
+    else
+        FloatStartCenter = Vector2.new(
+            FloatButton.AbsolutePosition.X
+                + FloatButton.AbsoluteSize.X / 2,
+
+            FloatButton.AbsolutePosition.Y
+                + FloatButton.AbsoluteSize.Y / 2
+        )
     end
 end)
 
-FloatButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        if FloatIsClick and FloatDragStart then
-            local delta = input.Position - FloatDragStart
-            if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
-                FloatDragging = true
-                FloatIsClick = false
-            end
-        end
-        
-        if FloatDragging and FloatStartPos then
-            local delta = input.Position - FloatDragStart
-            FloatButton.Position = UDim2.new(
-                FloatStartPos.X.Scale,
-                FloatStartPos.X.Offset + delta.X,
-                FloatStartPos.Y.Scale,
-                FloatStartPos.Y.Offset + delta.Y
-            )
+UserInputService.InputChanged:Connect(function(input)
+    if not FloatPressed
+        or not FloatDragStart
+        or not FloatStartCenter then
+        return
+    end
+
+    local validInput =
+        input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch
+
+    if not validInput then
+        return
+    end
+
+    local delta = input.Position - FloatDragStart
+
+    if not FloatDragging then
+        if math.abs(delta.X) >= FLOAT_DRAG_DISTANCE
+            or math.abs(delta.Y) >= FLOAT_DRAG_DISTANCE then
+            FloatDragging = true
         end
     end
-end)
 
-FloatButton.InputEnded:Connect(function()
     if FloatDragging then
-        FloatDragging = false
-        SaveToggles()
+        SetFloatCenter(
+            FloatStartCenter
+                + Vector2.new(delta.X, delta.Y)
+        )
     end
-    
-    if FloatIsClick and (tick() - FloatClickTime) < 0.3 then
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if not FloatPressed then
+        return
+    end
+
+    local matchingInput = false
+
+    if FloatPressedInput
+        and FloatPressedInput.UserInputType == Enum.UserInputType.Touch then
+        matchingInput = input == FloatPressedInput
+            or input.UserInputType == Enum.UserInputType.Touch
+    else
+        matchingInput =
+            input.UserInputType == Enum.UserInputType.MouseButton1
+    end
+
+    if not matchingInput then
+        return
+    end
+
+    local wasDragging = FloatDragging
+    local pressDuration = tick() - FloatPressTime
+
+    FloatPressed = false
+    FloatDragging = false
+    FloatDragStart = nil
+    FloatStartCenter = nil
+    FloatPressedInput = nil
+
+    if wasDragging then
+        SaveToggles()
+        return
+    end
+
+    if pressDuration < 0.5 and ShowWindow then
         ShowWindow()
     end
-    FloatIsClick = false
-    FloatDragging = false
 end)
 
-FloatButton.MouseEnter:Connect(function()
-    TweenService:Create(FloatButton, TweenInfo.new(0.2), {
-        Size = UDim2.new(0, 55, 0, 55),
-        BackgroundTransparency = 0.05
-    }):Play()
-end)
+if not IsMobile then
+    FloatButton.MouseEnter:Connect(function()
+        if FloatDragging then
+            return
+        end
 
-FloatButton.MouseLeave:Connect(function()
-    TweenService:Create(FloatButton, TweenInfo.new(0.2), {
-        Size = UDim2.new(0, 50, 0, 50),
-        BackgroundTransparency = 0.2
-    }):Play()
-end)
-
--- Fonction pour exécuter un script (identique au bouton Run)
-local function ExecuteScript(url, scriptName)
-    if not url or url == "" then
-        return false
-    end
-    
-    local success = false
-    
-    -- Si c'est un loadstring direct
-    if string.sub(url, 1, 10) == "loadstring" then
-        success = pcall(function()
-            loadstring(url)()
-        end)
-        return success
-    end
-    
-    -- Si c'est une URL (Luarmor ou autre)
-    local httpSuccess, response = pcall(function()
-        return game:HttpGet(url)
+        TweenService:Create(
+            FloatButton,
+            TweenInfo.new(0.2),
+            {
+                Size = UDim2.new(0, 55, 0, 55),
+                BackgroundTransparency = 0.05
+            }
+        ):Play()
     end)
-    
-    if not httpSuccess then
-        return false
+
+    FloatButton.MouseLeave:Connect(function()
+        TweenService:Create(
+            FloatButton,
+            TweenInfo.new(0.2),
+            {
+                Size = UDim2.new(
+                    0,
+                    FLOAT_BUTTON_SIZE,
+                    0,
+                    FLOAT_BUTTON_SIZE
+                ),
+                BackgroundTransparency = 0.2
+            }
+        ):Play()
+    end)
+end
+
+local function ExecuteScript(url, scriptName)
+    if type(url) ~= "string" or url == "" then
+        return false, "Lien ou code vide"
     end
-    
-    -- Essayer d'exécuter le script chargé
-    local func, err = loadstring(response)
-    if func then
-        success = pcall(function()
-            func()
-        end)
-    else
-        -- Si loadstring échoue, essayer d'exécuter directement
-        success = pcall(function()
-            loadstring(response)()
-        end)
+
+    if type(loadstring) ~= "function" then
+        return false, "loadstring n'est pas disponible"
     end
-    
-    return success
+
+    local sourceCode = url
+
+    local isUrl =
+        string.sub(url, 1, 7) == "http://"
+        or string.sub(url, 1, 8) == "https://"
+
+    if isUrl then
+        local httpSuccess, response = pcall(function()
+            return game:HttpGet(url)
+        end)
+
+        if not httpSuccess then
+            return false, tostring(response)
+        end
+
+        if type(response) ~= "string" or response == "" then
+            return false, "Le lien a renvoyé un contenu vide"
+        end
+
+        sourceCode = response
+    end
+
+    local compiledFunction
+    local compileError
+
+    local compileSuccess, compileResult = pcall(function()
+        local functionResult, errorResult = loadstring(sourceCode)
+
+        compiledFunction = functionResult
+        compileError = errorResult
+    end)
+
+    if not compileSuccess then
+        return false, tostring(compileResult)
+    end
+
+    if type(compiledFunction) ~= "function" then
+        return false, tostring(compileError or "Erreur de compilation")
+    end
+
+    local executeSuccess, executeError = pcall(compiledFunction)
+
+    if not executeSuccess then
+        return false, tostring(executeError)
+    end
+
+    return true
 end
 
 local function ShouldAutoExecute(scriptData, index)
-    if not ScriptToggles[index] then
+    if ScriptToggles[index] ~= true then
         return false
     end
-    
+
     if scriptData.requirePlaceId then
-        if #scriptData.PlaceIds == 0 then
+        if type(scriptData.PlaceIds) ~= "table"
+            or #scriptData.PlaceIds == 0 then
             return false
         end
-        local match = false
+
+        local placeMatches = false
+
         for _, placeId in ipairs(scriptData.PlaceIds) do
-            if placeId == CurrentPlaceId then
-                match = true
+            if tonumber(placeId) == tonumber(CurrentPlaceId) then
+                placeMatches = true
                 break
             end
         end
-        if not match then
+
+        if not placeMatches then
             return false
         end
     end
-    
+
     return true
+end
+
+local function SetAutoIndicator(index, text, color)
+    if not ScrollFrame then
+        return
+    end
+
+    local item = ScrollFrame:FindFirstChild(
+        "ScriptItem_" .. index
+    )
+
+    if not item then
+        return
+    end
+
+    local indicator = item:FindFirstChild("AutoIndicator")
+
+    if indicator then
+        indicator.Text = text
+        indicator.TextColor3 = color
+    end
+end
+
+local function RunScript(index)
+    local scriptData = Scripts[index]
+
+    if not scriptData then
+        return false, "Script introuvable"
+    end
+
+    if ExecutingScripts[index] then
+        return false, "Le script est déjà en cours d'exécution"
+    end
+
+    ExecutingScripts[index] = true
+
+    local success, errorMessage = ExecuteScript(
+        scriptData.Url,
+        scriptData.Name
+    )
+
+    ExecutingScripts[index] = false
+
+    return success, errorMessage
 end
 
 local function ExecuteAutoScripts()
     for i = 1, #Scripts do
-        if ShouldAutoExecute(Scripts[i], i) and not ExecutedScripts[i] then
-            local success = ExecuteScript(Scripts[i].Url, Scripts[i].Name)
+        local scriptData = Scripts[i]
+
+        if ShouldAutoExecute(scriptData, i)
+            and not ExecutedScripts[i]
+            and not ExecutingScripts[i] then
+
+            SetAutoIndicator(
+                i,
+                "⏳ Exécution...",
+                Color3.fromRGB(255, 200, 100)
+            )
+
+            local success, errorMessage = RunScript(i)
+
             if success then
                 ExecutedScripts[i] = true
-                local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
-                if item then
-                    local indicator = item:FindFirstChild("AutoIndicator")
-                    if indicator then
-                        indicator.Text = "✅ Exécuté"
-                        indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
-                    end
-                end
-                SaveToggles()
+
+                SetAutoIndicator(
+                    i,
+                    "✅ Exécuté",
+                    Color3.fromRGB(0, 255, 0)
+                )
+            else
+                ExecutedScripts[i] = false
+
+                SetAutoIndicator(
+                    i,
+                    "❌ Erreur",
+                    Color3.fromRGB(255, 90, 90)
+                )
+
+                warn(
+                    "[ScriptExecutor] Échec de l'auto-exécution de "
+                        .. tostring(scriptData.Name)
+                        .. " : "
+                        .. tostring(errorMessage)
+                )
             end
         end
     end
@@ -556,8 +941,8 @@ local function CreateScriptItem(scriptData, index)
     ItemFrame.BackgroundTransparency = 0.3
     ItemFrame.BorderSizePixel = 1
     ItemFrame.BorderColor3 = Color3.fromRGB(50, 50, 65)
-    ItemFrame.Parent = ScrollFrame
     ItemFrame.ZIndex = 2
+    ItemFrame.Parent = ScrollFrame
 
     local ItemCorner = Instance.new("UICorner")
     ItemCorner.CornerRadius = UDim.new(0, 6)
@@ -573,45 +958,71 @@ local function CreateScriptItem(scriptData, index)
     ScriptName.TextSize = GetAdaptiveFontSize()
     ScriptName.TextXAlignment = Enum.TextXAlignment.Left
     ScriptName.Font = Enum.Font.GothamBold
-    ScriptName.Parent = ItemFrame
     ScriptName.ZIndex = 3
+    ScriptName.Parent = ItemFrame
 
     local PlaceInfo = Instance.new("TextLabel")
     PlaceInfo.Name = "PlaceInfo"
     PlaceInfo.Size = UDim2.new(0.4, 0, 0.35, 0)
     PlaceInfo.Position = UDim2.new(0.05, 0, 0.5, 0)
     PlaceInfo.BackgroundTransparency = 1
-    if scriptData.requirePlaceId and #scriptData.PlaceIds > 0 then
-        PlaceInfo.Text = "📌 IDs: " .. table.concat(scriptData.PlaceIds, ", ")
-    elseif scriptData.requirePlaceId and #scriptData.PlaceIds == 0 then
+
+    if scriptData.requirePlaceId
+        and type(scriptData.PlaceIds) == "table"
+        and #scriptData.PlaceIds > 0 then
+
+        PlaceInfo.Text =
+            "📌 IDs: " .. table.concat(scriptData.PlaceIds, ", ")
+
+        PlaceInfo.TextColor3 =
+            Color3.fromRGB(150, 150, 170)
+    elseif scriptData.requirePlaceId then
         PlaceInfo.Text = "⚠️ Aucun ID défini"
-        PlaceInfo.TextColor3 = Color3.fromRGB(255, 200, 50)
+        PlaceInfo.TextColor3 =
+            Color3.fromRGB(255, 200, 50)
     else
         PlaceInfo.Text = "🌍 Tous les jeux"
-        PlaceInfo.TextColor3 = Color3.fromRGB(100, 200, 255)
+        PlaceInfo.TextColor3 =
+            Color3.fromRGB(100, 200, 255)
     end
-    PlaceInfo.TextColor3 = Color3.fromRGB(150, 150, 170)
+
     PlaceInfo.TextSize = GetAdaptiveFontSize() - 5
     PlaceInfo.TextXAlignment = Enum.TextXAlignment.Left
     PlaceInfo.Font = Enum.Font.GothamMedium
-    PlaceInfo.Parent = ItemFrame
     PlaceInfo.ZIndex = 3
+    PlaceInfo.Parent = ItemFrame
 
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Name = "ToggleButton"
-    ToggleButton.Size = UDim2.new(0, 55, 0, 26)
-    ToggleButton.Position = UDim2.new(0.5, -27.5, 0.5, -13)
-    ToggleButton.BackgroundColor3 = ScriptToggles[index] and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
+    ToggleButton.Size = UDim2.new(0, 75, 0, 26)
+    ToggleButton.Position = UDim2.new(0.5, -37.5, 0.5, -13)
+    ToggleButton.BackgroundColor3 =
+        ScriptToggles[index]
+        and Color3.fromRGB(40, 180, 80)
+        or Color3.fromRGB(180, 40, 40)
+
     ToggleButton.BackgroundTransparency = 0.2
     ToggleButton.BorderSizePixel = 1
-    ToggleButton.BorderColor3 = ScriptToggles[index] and Color3.fromRGB(40, 180, 80) or Color3.fromRGB(180, 40, 40)
-    ToggleButton.Text = ScriptToggles[index] and "✅ ACTIVÉ" or "❌ DÉSACTIVÉ"  -- Traduit
-    ToggleButton.TextColor3 = ScriptToggles[index] and Color3.fromRGB(180, 255, 200) or Color3.fromRGB(255, 180, 180)
+    ToggleButton.BorderColor3 =
+        ScriptToggles[index]
+        and Color3.fromRGB(40, 180, 80)
+        or Color3.fromRGB(180, 40, 40)
+
+    ToggleButton.Text =
+        ScriptToggles[index]
+        and "✅ ACTIVÉ"
+        or "❌ DÉSACTIVÉ"
+
+    ToggleButton.TextColor3 =
+        ScriptToggles[index]
+        and Color3.fromRGB(180, 255, 200)
+        or Color3.fromRGB(255, 180, 180)
+
     ToggleButton.TextSize = GetAdaptiveFontSize() - 4
     ToggleButton.Font = Enum.Font.GothamBold
-    ToggleButton.Parent = ItemFrame
-    ToggleButton.ZIndex = 3
     ToggleButton.AutoButtonColor = false
+    ToggleButton.ZIndex = 3
+    ToggleButton.Parent = ItemFrame
 
     local ToggleCorner = Instance.new("UICorner")
     ToggleCorner.CornerRadius = UDim.new(0, 5)
@@ -619,133 +1030,274 @@ local function CreateScriptItem(scriptData, index)
 
     local AutoIndicator = Instance.new("TextLabel")
     AutoIndicator.Name = "AutoIndicator"
-    AutoIndicator.Size = UDim2.new(0.2, 0, 0.3, 0)
-    AutoIndicator.Position = UDim2.new(0.75, 0, 0.55, 0)
+    AutoIndicator.Size = UDim2.new(0.22, 0, 0.3, 0)
+    AutoIndicator.Position = UDim2.new(0.74, 0, 0.55, 0)
     AutoIndicator.BackgroundTransparency = 1
-    AutoIndicator.Text = ExecutedScripts[index] and "✅ Exécuté" or "⏳ En attente"
-    AutoIndicator.TextColor3 = ExecutedScripts[index] and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(200, 200, 200)
+    AutoIndicator.Text = "⏳ En attente"
+    AutoIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
     AutoIndicator.TextSize = GetAdaptiveFontSize() - 5
     AutoIndicator.TextXAlignment = Enum.TextXAlignment.Center
     AutoIndicator.Font = Enum.Font.GothamMedium
-    AutoIndicator.Parent = ItemFrame
     AutoIndicator.ZIndex = 3
+    AutoIndicator.Parent = ItemFrame
 
     local ExecuteButton = Instance.new("TextButton")
     ExecuteButton.Name = "ExecuteButton"
-    local btnW, btnH = GetAdaptiveButtonSize()
-    ExecuteButton.Size = UDim2.new(0, btnW, 0, btnH)
-    ExecuteButton.Position = UDim2.new(0.78, 0, 0.15, 0)
-    ExecuteButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+
+    local buttonWidth, buttonHeight =
+        GetAdaptiveButtonSize()
+
+    ExecuteButton.Size = UDim2.new(
+        0,
+        buttonWidth,
+        0,
+        buttonHeight
+    )
+
+    ExecuteButton.Position = UDim2.new(
+        0.78,
+        0,
+        0.15,
+        0
+    )
+
+    ExecuteButton.BackgroundColor3 =
+        Color3.fromRGB(40, 180, 80)
+
     ExecuteButton.BackgroundTransparency = 0.2
     ExecuteButton.BorderSizePixel = 0
-    ExecuteButton.Text = "▶ Exécuter"  -- Traduit
-    ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
-    ExecuteButton.TextSize = GetAdaptiveFontSize() - 4
+    ExecuteButton.Text = "▶ Exécuter"
+    ExecuteButton.TextColor3 =
+        Color3.fromRGB(180, 255, 200)
+
+    ExecuteButton.TextSize =
+        GetAdaptiveFontSize() - 4
+
     ExecuteButton.Font = Enum.Font.GothamBold
-    ExecuteButton.Parent = ItemFrame
-    ExecuteButton.ZIndex = 3
     ExecuteButton.AutoButtonColor = false
+    ExecuteButton.ZIndex = 3
+    ExecuteButton.Parent = ItemFrame
 
     local ButtonCorner = Instance.new("UICorner")
     ButtonCorner.CornerRadius = UDim.new(0, 5)
     ButtonCorner.Parent = ExecuteButton
 
-    local function ToggleScript()
-        ScriptToggles[index] = not ScriptToggles[index]
-        
+    local function RefreshToggleVisual()
         if ScriptToggles[index] then
             ToggleButton.Text = "✅ ACTIVÉ"
-            ToggleButton.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-            ToggleButton.BorderColor3 = Color3.fromRGB(40, 180, 80)
-            ToggleButton.TextColor3 = Color3.fromRGB(180, 255, 200)
-            
-            if ShouldAutoExecute(scriptData, index) and not ExecutedScripts[index] then
-                local success = ExecuteScript(scriptData.Url, scriptData.Name)
+            ToggleButton.BackgroundColor3 =
+                Color3.fromRGB(40, 180, 80)
+
+            ToggleButton.BorderColor3 =
+                Color3.fromRGB(40, 180, 80)
+
+            ToggleButton.TextColor3 =
+                Color3.fromRGB(180, 255, 200)
+        else
+            ToggleButton.Text = "❌ DÉSACTIVÉ"
+            ToggleButton.BackgroundColor3 =
+                Color3.fromRGB(180, 40, 40)
+
+            ToggleButton.BorderColor3 =
+                Color3.fromRGB(180, 40, 40)
+
+            ToggleButton.TextColor3 =
+                Color3.fromRGB(255, 180, 180)
+        end
+    end
+
+    ToggleButton.MouseButton1Click:Connect(function()
+        ScriptToggles[index] =
+            not ScriptToggles[index]
+
+        RefreshToggleVisual()
+
+        if ScriptToggles[index] then
+            ExecutedScripts[index] = false
+
+            if ShouldAutoExecute(scriptData, index) then
+                SetAutoIndicator(
+                    index,
+                    "⏳ Exécution...",
+                    Color3.fromRGB(255, 200, 100)
+                )
+
+                local success, errorMessage =
+                    RunScript(index)
+
                 if success then
                     ExecutedScripts[index] = true
-                    AutoIndicator.Text = "✅ Exécuté"
-                    AutoIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
+
+                    SetAutoIndicator(
+                        index,
+                        "✅ Exécuté",
+                        Color3.fromRGB(0, 255, 0)
+                    )
+                else
+                    ExecutedScripts[index] = false
+
+                    SetAutoIndicator(
+                        index,
+                        "❌ Erreur",
+                        Color3.fromRGB(255, 90, 90)
+                    )
+
+                    warn(
+                        "[ScriptExecutor] Échec de l'exécution de "
+                            .. tostring(scriptData.Name)
+                            .. " : "
+                            .. tostring(errorMessage)
+                    )
                 end
             end
         else
-            ToggleButton.Text = "❌ DÉSACTIVÉ"
-            ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-            ToggleButton.BorderColor3 = Color3.fromRGB(180, 40, 40)
-            ToggleButton.TextColor3 = Color3.fromRGB(255, 180, 180)
             ExecutedScripts[index] = false
-            AutoIndicator.Text = "⏳ En attente"
-            AutoIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
-        end
-        
-        SaveToggles()
-    end
 
-    ToggleButton.MouseButton1Click:Connect(ToggleScript)
+            SetAutoIndicator(
+                index,
+                "⏳ En attente",
+                Color3.fromRGB(200, 200, 200)
+            )
+        end
+
+        SaveToggles()
+    end)
+
+    ExecuteButton.MouseButton1Click:Connect(function()
+        if ExecutingScripts[index] then
+            return
+        end
+
+        TweenService:Create(
+            ExecuteButton,
+            TweenInfo.new(0.1),
+            {
+                Size = UDim2.new(
+                    0,
+                    buttonWidth - 5,
+                    0,
+                    buttonHeight - 3
+                )
+            }
+        ):Play()
+
+        task.wait(0.1)
+
+        TweenService:Create(
+            ExecuteButton,
+            TweenInfo.new(0.1),
+            {
+                Size = UDim2.new(
+                    0,
+                    buttonWidth,
+                    0,
+                    buttonHeight
+                )
+            }
+        ):Play()
+
+        local oldText = ExecuteButton.Text
+
+        ExecuteButton.Text = "⏳..."
+        ExecuteButton.TextColor3 =
+            Color3.fromRGB(255, 200, 100)
+
+        local success, errorMessage =
+            RunScript(index)
+
+        if success then
+            ExecuteButton.Text = "✅ Fait !"
+            ExecuteButton.TextColor3 =
+                Color3.fromRGB(0, 255, 0)
+
+            if ScriptToggles[index]
+                and ShouldAutoExecute(scriptData, index) then
+
+                ExecutedScripts[index] = true
+
+                SetAutoIndicator(
+                    index,
+                    "✅ Exécuté",
+                    Color3.fromRGB(0, 255, 0)
+                )
+            end
+
+            task.wait(0.5)
+        else
+            ExecuteButton.Text = "❌ Erreur"
+            ExecuteButton.TextColor3 =
+                Color3.fromRGB(255, 90, 90)
+
+            if ScriptToggles[index] then
+                ExecutedScripts[index] = false
+
+                SetAutoIndicator(
+                    index,
+                    "❌ Erreur",
+                    Color3.fromRGB(255, 90, 90)
+                )
+            end
+
+            warn(
+                "[ScriptExecutor] Échec de l'exécution de "
+                    .. tostring(scriptData.Name)
+                    .. " : "
+                    .. tostring(errorMessage)
+            )
+
+            task.wait(0.7)
+        end
+
+        ExecuteButton.Text = oldText
+        ExecuteButton.TextColor3 =
+            Color3.fromRGB(180, 255, 200)
+    end)
 
     if not IsMobile then
         ToggleButton.MouseEnter:Connect(function()
-            TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
-                BackgroundTransparency = 0.1
-            }):Play()
+            TweenService:Create(
+                ToggleButton,
+                TweenInfo.new(0.2),
+                {
+                    BackgroundTransparency = 0.1
+                }
+            ):Play()
         end)
 
         ToggleButton.MouseLeave:Connect(function()
-            TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
-                BackgroundTransparency = 0.2
-            }):Play()
+            TweenService:Create(
+                ToggleButton,
+                TweenInfo.new(0.2),
+                {
+                    BackgroundTransparency = 0.2
+                }
+            ):Play()
         end)
 
         ExecuteButton.MouseEnter:Connect(function()
-            TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
-                BackgroundTransparency = 0.1,
-                BackgroundColor3 = Color3.fromRGB(50, 220, 100)
-            }):Play()
+            TweenService:Create(
+                ExecuteButton,
+                TweenInfo.new(0.2),
+                {
+                    BackgroundTransparency = 0.1,
+                    BackgroundColor3 =
+                        Color3.fromRGB(50, 220, 100)
+                }
+            ):Play()
         end)
 
         ExecuteButton.MouseLeave:Connect(function()
-            TweenService:Create(ExecuteButton, TweenInfo.new(0.2), {
-                BackgroundTransparency = 0.2,
-                BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-            }):Play()
+            TweenService:Create(
+                ExecuteButton,
+                TweenInfo.new(0.2),
+                {
+                    BackgroundTransparency = 0.2,
+                    BackgroundColor3 =
+                        Color3.fromRGB(40, 180, 80)
+                }
+            ):Play()
         end)
     end
-
-    -- Bouton Run
-    ExecuteButton.MouseButton1Click:Connect(function()
-        if ExecuteButton.Text == "⏳..." then
-            return
-        end
-        
-        TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
-            Size = UDim2.new(0, btnW-5, 0, btnH-3)
-        }):Play()
-        task.wait(0.1)
-        TweenService:Create(ExecuteButton, TweenInfo.new(0.1), {
-            Size = UDim2.new(0, btnW, 0, btnH)
-        }):Play()
-
-        local oldText = ExecuteButton.Text
-        ExecuteButton.Text = "⏳..."
-        ExecuteButton.TextColor3 = Color3.fromRGB(255, 200, 100)
-        
-        local success = ExecuteScript(scriptData.Url, scriptData.Name)
-        
-        task.wait(0.3)
-        if success then
-            ExecuteButton.Text = "✅ Fait!"
-            ExecuteButton.TextColor3 = Color3.fromRGB(0, 255, 0)
-            task.wait(0.5)
-        end
-        ExecuteButton.Text = oldText
-        ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 200)
-        
-        if ScriptToggles[index] and ShouldAutoExecute(scriptData, index) then
-            ExecutedScripts[index] = true
-            AutoIndicator.Text = "✅ Exécuté"
-            AutoIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
-            SaveToggles()
-        end
-    end)
 
     return ItemFrame
 end
@@ -755,121 +1307,217 @@ for i = 1, #Scripts do
 end
 
 local function UpdateCanvasSize()
-    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, (#Scripts * 83) + 10)
+    ScrollFrame.CanvasSize = UDim2.new(
+        0,
+        0,
+        0,
+        (#Scripts * 83) + 10
+    )
 end
+
 UpdateCanvasSize()
 
-local function MinimizeWindow()
-    SaveToggles()
-    MainFrame.Visible = false
-    FloatButton.Visible = true
-    
-    FloatButton.Size = UDim2.new(0, 35, 0, 35)
-    TweenService:Create(FloatButton, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-        Size = UDim2.new(0, 50, 0, 50)
-    }):Play()
+UpdateAllScriptVisuals = function()
+    if not ScrollFrame then
+        return
+    end
+
+    for i = 1, #Scripts do
+        local item = ScrollFrame:FindFirstChild(
+            "ScriptItem_" .. i
+        )
+
+        if item then
+            local toggle =
+                item:FindFirstChild("ToggleButton")
+
+            local indicator =
+                item:FindFirstChild("AutoIndicator")
+
+            if toggle then
+                if ScriptToggles[i] then
+                    toggle.Text = "✅ ACTIVÉ"
+                    toggle.BackgroundColor3 =
+                        Color3.fromRGB(40, 180, 80)
+
+                    toggle.BorderColor3 =
+                        Color3.fromRGB(40, 180, 80)
+
+                    toggle.TextColor3 =
+                        Color3.fromRGB(180, 255, 200)
+                else
+                    toggle.Text = "❌ DÉSACTIVÉ"
+                    toggle.BackgroundColor3 =
+                        Color3.fromRGB(180, 40, 40)
+
+                    toggle.BorderColor3 =
+                        Color3.fromRGB(180, 40, 40)
+
+                    toggle.TextColor3 =
+                        Color3.fromRGB(255, 180, 180)
+                end
+            end
+
+            if indicator then
+                if ExecutedScripts[i] then
+                    indicator.Text = "✅ Exécuté"
+                    indicator.TextColor3 =
+                        Color3.fromRGB(0, 255, 0)
+                else
+                    indicator.Text = "⏳ En attente"
+                    indicator.TextColor3 =
+                        Color3.fromRGB(200, 200, 200)
+                end
+            end
+        end
+    end
 end
 
-local function ShowWindow()
+MinimizeWindow = function()
+    SaveToggles()
+
+    MainFrame.Visible = false
+    FloatButton.Visible = true
+
+    SetFloatCenter(Vector2.new(
+        CurrentFloatNormalized.X * GetViewportSize().X,
+        CurrentFloatNormalized.Y * GetViewportSize().Y
+    ))
+
+    FloatButton.Size = UDim2.new(0, 35, 0, 35)
+
+    TweenService:Create(
+        FloatButton,
+        TweenInfo.new(
+            0.3,
+            Enum.EasingStyle.Back,
+            Enum.EasingDirection.Out
+        ),
+        {
+            Size = UDim2.new(
+                0,
+                FLOAT_BUTTON_SIZE,
+                0,
+                FLOAT_BUTTON_SIZE
+            )
+        }
+    ):Play()
+end
+
+ShowWindow = function()
     MainFrame.Visible = true
     FloatButton.Visible = false
 end
 
-local function CloseWindow()
+CloseWindow = function()
     SaveToggles()
+
     MainFrame.Visible = false
     FloatButton.Visible = false
 end
 
 MinimizeButton.MouseButton1Click:Connect(MinimizeWindow)
-FloatButton.MouseButton1Click:Connect(ShowWindow)
 CloseButton.MouseButton1Click:Connect(CloseWindow)
 
-LoadToggles()
+local function ReloadToggles()
+    LoadConfigData()
 
-for i = 1, #Scripts do
-    local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
-    if item then
-        local toggle = item:FindFirstChild("ToggleButton")
-        local indicator = item:FindFirstChild("AutoIndicator")
-        if toggle then
-            if ScriptToggles[i] then
-                toggle.Text = "✅ ACTIVÉ"
-                toggle.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
-                toggle.BorderColor3 = Color3.fromRGB(40, 180, 80)
-                toggle.TextColor3 = Color3.fromRGB(180, 255, 200)
-            else
-                toggle.Text = "❌ DÉSACTIVÉ"
-                toggle.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-                toggle.BorderColor3 = Color3.fromRGB(180, 40, 40)
-                toggle.TextColor3 = Color3.fromRGB(255, 180, 180)
-            end
-        end
-        if indicator and ExecutedScripts[i] then
-            indicator.Text = "✅ Exécuté"
-            indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
-        end
+    if ApplyLoadedFloatPosition then
+        ApplyLoadedFloatPosition()
+    end
+
+    if UpdateAllScriptVisuals then
+        UpdateAllScriptVisuals()
     end
 end
 
--- Exécution automatique après chargement
-task.wait(3)
-ExecuteAutoScripts()
+local LastViewportSize = GetViewportSize()
 
 RunService.RenderStepped:Connect(function()
     if game.PlaceId ~= CurrentPlaceId then
         CurrentPlaceId = game.PlaceId
+
         for i = 1, #Scripts do
             ExecutedScripts[i] = false
-            local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
-            if item then
-                local indicator = item:FindFirstChild("AutoIndicator")
-                if indicator then
-                    indicator.Text = "⏳ En attente"
-                    indicator.TextColor3 = Color3.fromRGB(200, 200, 200)
-                end
-            end
-        end
-        ExecuteAutoScripts()
-    end
-end)
+            ExecutingScripts[i] = false
 
-RunService.RenderStepped:Connect(function()
-    local currentSize = workspace.CurrentCamera.ViewportSize
-    local isNowSmall = currentSize.X < 600
-    
-    if isNowSmall ~= IsSmallScreen then
-        IsSmallScreen = isNowSmall
-        IsMobile = UserInputService.TouchEnabled
-        
-        if FloatButton.Visible then
-            FloatButton.Position = UDim2.new(0.5, -25, 0.02, 0)
+            SetAutoIndicator(
+                i,
+                "⏳ En attente",
+                Color3.fromRGB(200, 200, 200)
+            )
         end
-        
+
+        task.spawn(ExecuteAutoScripts)
+    end
+
+    local currentSize = GetViewportSize()
+
+    if currentSize ~= LastViewportSize then
+        LastViewportSize = currentSize
+
+        local isNowSmall = currentSize.X < 600
+
+        if isNowSmall ~= IsSmallScreen then
+            IsSmallScreen = isNowSmall
+            IsMobile = UserInputService.TouchEnabled
+        end
+
         UpdateMainFrameSize()
-        
+
+        if CurrentFloatNormalized then
+            SetFloatCenter(Vector2.new(
+                CurrentFloatNormalized.X * currentSize.X,
+                CurrentFloatNormalized.Y * currentSize.Y
+            ))
+        else
+            ApplyLoadedFloatPosition()
+        end
+
         local newFontSize = GetAdaptiveFontSize()
+
         Title.TextSize = newFontSize
-        
-        for _, item in pairs(ScrollFrame:GetChildren()) do
-            if item:IsA("Frame") and item.Name:match("ScriptItem") then
-                for _, child in pairs(item:GetChildren()) do
+
+        for _, item in ipairs(ScrollFrame:GetChildren()) do
+            if item:IsA("Frame")
+                and item.Name:match("^ScriptItem_") then
+
+                for _, child in ipairs(item:GetChildren()) do
                     if child:IsA("TextButton") then
                         if child.Name == "ExecuteButton" then
-                            local btnW, btnH = GetAdaptiveButtonSize()
-                            child.Size = UDim2.new(0, btnW, 0, btnH)
-                            child.Position = UDim2.new(0.78, 0, 0.15, 0)
-                            child.TextSize = GetAdaptiveFontSize() - 4
+                            local newWidth, newHeight =
+                                GetAdaptiveButtonSize()
+
+                            child.Size = UDim2.new(
+                                0,
+                                newWidth,
+                                0,
+                                newHeight
+                            )
+
+                            child.Position = UDim2.new(
+                                0.78,
+                                0,
+                                0.15,
+                                0
+                            )
+
+                            child.TextSize =
+                                GetAdaptiveFontSize() - 4
                         elseif child.Name == "ToggleButton" then
-                            child.TextSize = GetAdaptiveFontSize() - 4
+                            child.TextSize =
+                                GetAdaptiveFontSize() - 4
                         end
                     elseif child:IsA("TextLabel") then
                         if child.Name == "ScriptName" then
-                            child.TextSize = GetAdaptiveFontSize()
+                            child.TextSize =
+                                GetAdaptiveFontSize()
                         elseif child.Name == "PlaceInfo" then
-                            child.TextSize = GetAdaptiveFontSize() - 5
+                            child.TextSize =
+                                GetAdaptiveFontSize() - 5
                         elseif child.Name == "AutoIndicator" then
-                            child.TextSize = GetAdaptiveFontSize() - 5
+                            child.TextSize =
+                                GetAdaptiveFontSize() - 5
                         end
                     end
                 end
@@ -878,8 +1526,16 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+task.spawn(function()
+    task.wait(2)
+
+    -- Les états ExecutedScripts sont toujours faux au lancement.
+    -- Tous les scripts activés peuvent donc être exécutés normalement.
+    ExecuteAutoScripts()
+end)
+
 _G.ShowScriptExecutor = ShowWindow
 _G.CloseScriptExecutor = CloseWindow
 _G.ExecuteAutoScripts = ExecuteAutoScripts
 _G.SaveToggles = SaveToggles
-_G.LoadToggles = LoadToggles
+_G.LoadToggles = ReloadToggles
