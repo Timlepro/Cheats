@@ -43,6 +43,7 @@ local State = {
     JumpValue = 50,
 
     FlyEnabled = false,
+    FlySpeedValue = 55,
     NoclipEnabled = false,
     GodEnabled = false,
     ESPEnabled = false,
@@ -60,11 +61,12 @@ local Humanoid = nil
 local HumanoidRootPart = nil
 
 local DefaultWalkSpeed = 16
+local DefaultUseJumpPower = true
 local DefaultJumpPower = 50
+local DefaultJumpHeight = 7.2
 
 local FlyBodyVelocity = nil
 local FlyBodyGyro = nil
-local FlySpeed = 55
 
 local LastJumpRequest = 0
 local DoubleJumpWindow = 0.32
@@ -238,8 +240,9 @@ local function UpdateCharacter(newCharacter)
 
     if Humanoid then
         DefaultWalkSpeed = Humanoid.WalkSpeed
+        DefaultUseJumpPower = Humanoid.UseJumpPower
         DefaultJumpPower = Humanoid.JumpPower
-        Humanoid.UseJumpPower = true
+        DefaultJumpHeight = Humanoid.JumpHeight
     end
 end
 
@@ -261,10 +264,15 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
+local BASE_WIDTH = 350
+local BASE_HEIGHT = 390
+local TITLE_HEIGHT = 36
+
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.fromOffset(460, 500)
-MainFrame.Position = UDim2.new(0.5, -230, 0.5, -250)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.Size = UDim2.fromOffset(BASE_WIDTH, BASE_HEIGHT)
+MainFrame.Position = UDim2.fromScale(0.5, 0.5)
 MainFrame.BackgroundColor3 = COLORS.Background
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -273,6 +281,27 @@ MainFrame.Parent = ScreenGui
 AddCorner(MainFrame, 16)
 AddStroke(MainFrame, COLORS.Border, 1)
 
+local InterfaceScale = Instance.new("UIScale")
+InterfaceScale.Scale = 1
+InterfaceScale.Parent = MainFrame
+
+local function UpdateInterfaceScale()
+    local camera = Workspace.CurrentCamera
+    if not camera then
+        return
+    end
+
+    local viewport = camera.ViewportSize
+    local widthScale = (viewport.X - 20) / BASE_WIDTH
+    local heightScale = (viewport.Y - 40) / BASE_HEIGHT
+
+    InterfaceScale.Scale = math.clamp(
+        math.min(widthScale, heightScale, 1),
+        0.68,
+        1
+    )
+end
+
 local MainLayout = AddListLayout(MainFrame, Enum.FillDirection.Vertical, 0)
 MainLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
@@ -280,7 +309,7 @@ MainLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 local TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 42)
+TitleBar.Size = UDim2.new(1, 0, 0, TITLE_HEIGHT)
 TitleBar.BackgroundColor3 = COLORS.Panel
 TitleBar.BorderSizePixel = 0
 TitleBar.Active = true
@@ -297,13 +326,13 @@ TitleLabel.Size = UDim2.new(1, -82, 1, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Text = "Menu de test"
 TitleLabel.TextColor3 = COLORS.Text
-TitleLabel.TextSize = 15
+TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
 
 local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Size = UDim2.fromOffset(32, 28)
+MinimizeButton.Size = UDim2.fromOffset(30, 24)
 MinimizeButton.BackgroundColor3 = COLORS.Element
 MinimizeButton.BorderSizePixel = 0
 MinimizeButton.Text = "−"
@@ -315,7 +344,7 @@ MinimizeButton.Parent = TitleBar
 AddCorner(MinimizeButton, 14)
 
 local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.fromOffset(32, 28)
+CloseButton.Size = UDim2.fromOffset(30, 24)
 CloseButton.BackgroundColor3 = COLORS.Red
 CloseButton.BorderSizePixel = 0
 CloseButton.Text = "×"
@@ -330,7 +359,7 @@ AddCorner(CloseButton, 14)
 
 local Content = Instance.new("ScrollingFrame")
 Content.Name = "Content"
-Content.Size = UDim2.new(1, 0, 1, -42)
+Content.Size = UDim2.new(1, 0, 1, -TITLE_HEIGHT)
 Content.BackgroundTransparency = 1
 Content.BorderSizePixel = 0
 Content.CanvasSize = UDim2.fromOffset(0, 0)
@@ -339,14 +368,14 @@ Content.ScrollBarThickness = 5
 Content.ScrollBarImageColor3 = COLORS.Border
 Content.LayoutOrder = 2
 Content.Parent = MainFrame
-AddPadding(Content, 10, 10, 10, 10)
+AddPadding(Content, 8, 8, 8, 8)
 
-local ContentLayout = AddListLayout(Content, Enum.FillDirection.Vertical, 8)
+local ContentLayout = AddListLayout(Content, Enum.FillDirection.Vertical, 6)
 ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 --==================== Section déplacement =========
 
-local MovementSection = CreateSection(Content, "Déplacement", 118)
+local MovementSection = CreateSection(Content, "Déplacement", 142)
 
 local SpeedRow = CreateRow(MovementSection, 34, 6)
 
@@ -364,9 +393,16 @@ JumpLabel.Size = UDim2.new(0.34, 0, 1, 0)
 local JumpBox = CreateTextBox(JumpRow, "50", "Valeur", 0.28)
 local JumpToggle = CreateButton(JumpRow, "OFF", 0.30)
 
+local FlySpeedRow = CreateRow(MovementSection, 34, 6)
+
+local FlySpeedLabel = CreateLabel(FlySpeedRow, "Vitesse du vol", 34)
+FlySpeedLabel.Size = UDim2.new(0.52, 0, 1, 0)
+
+local FlySpeedBox = CreateTextBox(FlySpeedRow, "55", "Valeur", 0.44)
+
 --==================== Section fonctions ===========
 
-local PowersSection = CreateSection(Content, "Fonctions", 116)
+local PowersSection = CreateSection(Content, "Fonctions", 108)
 
 local PowersGridHolder = Instance.new("Frame")
 PowersGridHolder.Size = UDim2.new(1, 0, 0, 70)
@@ -387,7 +423,7 @@ local ESPToggle = CreateButton(PowersGridHolder, "ESP OFF", 1)
 
 --==================== Section téléportation =======
 
-local TeleportSection = CreateSection(Content, "Téléportation", 332)
+local TeleportSection = CreateSection(Content, "Téléportation", 270)
 
 local SearchRow = CreateRow(TeleportSection, 34, 6)
 
@@ -412,7 +448,7 @@ SelectedLabel.TextSize = 12
 
 local PlayerListFrame = Instance.new("ScrollingFrame")
 PlayerListFrame.Name = "PlayerList"
-PlayerListFrame.Size = UDim2.new(1, 0, 0, 174)
+PlayerListFrame.Size = UDim2.new(1, 0, 0, 112)
 PlayerListFrame.BackgroundColor3 = COLORS.Background
 PlayerListFrame.BorderSizePixel = 0
 PlayerListFrame.CanvasSize = UDim2.fromOffset(0, 0)
@@ -602,6 +638,19 @@ local function ToggleFly()
     else
         StartFly()
     end
+end
+
+local function RestoreMovementValues()
+    local _, humanoid = GetCharacterParts()
+
+    if not humanoid then
+        return
+    end
+
+    humanoid.WalkSpeed = DefaultWalkSpeed
+    humanoid.UseJumpPower = DefaultUseJumpPower
+    humanoid.JumpPower = DefaultJumpPower
+    humanoid.JumpHeight = DefaultJumpHeight
 end
 
 --==================== Noclip ======================
@@ -926,10 +975,10 @@ Track(MinimizeButton.MouseButton1Click:Connect(function()
     Content.Visible = not State.Minimized
 
     if State.Minimized then
-        MainFrame.Size = UDim2.fromOffset(460, 42)
+        MainFrame.Size = UDim2.fromOffset(BASE_WIDTH, TITLE_HEIGHT)
         MinimizeButton.Text = "□"
     else
-        MainFrame.Size = UDim2.fromOffset(460, 500)
+        MainFrame.Size = UDim2.fromOffset(BASE_WIDTH, BASE_HEIGHT)
         MinimizeButton.Text = "−"
     end
 end))
@@ -943,6 +992,7 @@ local function Cleanup()
     State.TeleportContinuous = false
 
     StopFly()
+    RestoreMovementValues()
     RestoreNoclip()
 
     for player, _ in pairs(ESP.CharacterConnections) do
@@ -967,14 +1017,17 @@ Track(CloseButton.MouseButton1Click:Connect(Cleanup))
 Track(SpeedToggle.MouseButton1Click:Connect(function()
     State.SpeedEnabled = not State.SpeedEnabled
 
+    local _, humanoid = GetCharacterParts()
+
     if State.SpeedEnabled then
+        if humanoid then
+            DefaultWalkSpeed = humanoid.WalkSpeed
+        end
+
         State.SpeedValue = ParseNumber(SpeedBox.Text, 16, 0, 200)
         SpeedBox.Text = tostring(State.SpeedValue)
-    else
-        local _, humanoid = GetCharacterParts()
-        if humanoid then
-            humanoid.WalkSpeed = DefaultWalkSpeed
-        end
+    elseif humanoid then
+        humanoid.WalkSpeed = DefaultWalkSpeed
     end
 
     SetToggleVisual(SpeedToggle, State.SpeedEnabled, "ON", "OFF")
@@ -994,14 +1047,21 @@ end))
 Track(JumpToggle.MouseButton1Click:Connect(function()
     State.JumpEnabled = not State.JumpEnabled
 
+    local _, humanoid = GetCharacterParts()
+
     if State.JumpEnabled then
+        if humanoid then
+            DefaultUseJumpPower = humanoid.UseJumpPower
+            DefaultJumpPower = humanoid.JumpPower
+            DefaultJumpHeight = humanoid.JumpHeight
+        end
+
         State.JumpValue = ParseNumber(JumpBox.Text, 50, 0, 300)
         JumpBox.Text = tostring(State.JumpValue)
-    else
-        local _, humanoid = GetCharacterParts()
-        if humanoid then
-            humanoid.JumpPower = DefaultJumpPower
-        end
+    elseif humanoid then
+        humanoid.UseJumpPower = DefaultUseJumpPower
+        humanoid.JumpPower = DefaultJumpPower
+        humanoid.JumpHeight = DefaultJumpHeight
     end
 
     SetToggleVisual(JumpToggle, State.JumpEnabled, "ON", "OFF")
@@ -1016,6 +1076,17 @@ Track(JumpBox.FocusLost:Connect(function()
     )
 
     JumpBox.Text = tostring(State.JumpValue)
+end))
+
+Track(FlySpeedBox.FocusLost:Connect(function()
+    State.FlySpeedValue = ParseNumber(
+        FlySpeedBox.Text,
+        State.FlySpeedValue,
+        5,
+        250
+    )
+
+    FlySpeedBox.Text = tostring(State.FlySpeedValue)
 end))
 
 Track(FlyToggle.MouseButton1Click:Connect(ToggleFly))
@@ -1065,14 +1136,10 @@ Track(SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
 end))
 
 Track(UserInputService.JumpRequest:Connect(function()
-    if State.FlyEnabled then
-        return
-    end
-
     local currentTime = os.clock()
 
     if currentTime - LastJumpRequest <= DoubleJumpWindow then
-        StartFly()
+        ToggleFly()
         LastJumpRequest = 0
     else
         LastJumpRequest = currentTime
@@ -1139,27 +1206,54 @@ Track(RunService.RenderStepped:Connect(function()
         return
     end
 
-    local velocity = Vector3.new(0, 0, 0)
-    local moveDirection = humanoid.MoveDirection
+    local flySpeed = State.FlySpeedValue
+    local cameraCFrame = camera.CFrame
+    local forward = cameraCFrame.LookVector
+    local right = cameraCFrame.RightVector
+    local up = cameraCFrame.UpVector
+    local direction = Vector3.new(0, 0, 0)
 
-    if moveDirection.Magnitude > 0 then
-        velocity = moveDirection.Unit * FlySpeed
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+        direction = direction + forward
+    end
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+        direction = direction - forward
+    end
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+        direction = direction - right
+    end
+
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+        direction = direction + right
     end
 
     if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-        velocity = velocity + Vector3.new(0, FlySpeed, 0)
+        direction = direction + up
     end
 
     if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
         or UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        velocity = velocity - Vector3.new(0, FlySpeed, 0)
+        direction = direction - up
     end
 
-    FlyBodyVelocity.Velocity = velocity
+    -- Sur mobile, le joystick fournit Humanoid.MoveDirection.
+    if direction.Magnitude == 0 and humanoid.MoveDirection.Magnitude > 0 then
+        direction = humanoid.MoveDirection.Unit
+    end
 
+    if direction.Magnitude > 0 then
+        FlyBodyVelocity.Velocity = direction.Unit * flySpeed
+    else
+        FlyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    end
+
+    -- Le personnage regarde toujours dans la même direction que la caméra.
     FlyBodyGyro.CFrame = CFrame.lookAt(
         root.Position,
-        root.Position + camera.CFrame.LookVector
+        root.Position + forward,
+        up
     )
 end))
 
@@ -1204,10 +1298,39 @@ Track(LocalPlayer.CharacterAdded:Connect(function(newCharacter)
     end
 end))
 
+--==================== Adaptation à l'écran ========
+
+local CameraViewportConnection = nil
+
+local function BindViewportResize()
+    if CameraViewportConnection then
+        CameraViewportConnection:Disconnect()
+        CameraViewportConnection = nil
+    end
+
+    local camera = Workspace.CurrentCamera
+    if not camera then
+        return
+    end
+
+    CameraViewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(
+        UpdateInterfaceScale
+    )
+    Track(CameraViewportConnection)
+    UpdateInterfaceScale()
+end
+
+Track(Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(BindViewportResize))
+
 --==================== Initialisation ==============
+
+SpeedBox.Text = tostring(DefaultWalkSpeed)
+JumpBox.Text = tostring(DefaultJumpPower)
+FlySpeedBox.Text = tostring(State.FlySpeedValue)
 
 UpdateDistanceDisplay(0)
 RefreshPlayerList("")
 RefreshESP()
+BindViewportResize()
 
-print("Menu Roblox chargé avec UIListLayout.")
+print("Menu Roblox compact chargé avec vol corrigé.")
