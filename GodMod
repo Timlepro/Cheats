@@ -54,6 +54,8 @@ local state = {
 local Character
 local Humanoid
 local HumanoidRootPart
+local defaultWalkSpeed = 16
+local defaultJumpPower = 50
 
 local connections = {}
 local noclipOriginalStates = {}
@@ -128,6 +130,14 @@ local function updateCharacter(character)
         or Character:WaitForChild("HumanoidRootPart", 5)
 
     if Humanoid then
+        if not state.speedEnabled then
+            defaultWalkSpeed = Humanoid.WalkSpeed
+        end
+
+        if not state.jumpEnabled then
+            defaultJumpPower = Humanoid.JumpPower
+        end
+
         Humanoid.UseJumpPower = true
     end
 end
@@ -172,7 +182,7 @@ local function getAdaptiveSize()
 
     if UserInputService.TouchEnabled or viewport.X < 700 then
         width = math.max(280, viewport.X - 24)
-        height = math.max(330, math.min(viewport.Y - 40, 480))
+        height = math.max(280, math.min(viewport.Y - 40, 480))
     end
 
     return Vector2.new(width, height)
@@ -185,11 +195,13 @@ local function centerMainFrame()
         MainFrame.Size = UDim2.fromOffset(expandedSize.X, expandedSize.Y)
     end
 
+    local displayedHeight = state.minimized and 38 or expandedSize.Y
+
     MainFrame.Position = UDim2.new(
         0.5,
-        -MainFrame.AbsoluteSize.X / 2,
+        -expandedSize.X / 2,
         0.5,
-        -MainFrame.AbsoluteSize.Y / 2
+        -displayedHeight / 2
     )
 end
 
@@ -737,7 +749,7 @@ local function applyESPToCharacter(player, character)
     highlight.OutlineColor = COLORS.Text
     highlight.OutlineTransparency = 0.1
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = ScreenGui
+    highlight.Parent = character
     espData.highlights[player] = highlight
 
     local billboard = Instance.new("BillboardGui")
@@ -1003,9 +1015,17 @@ track(CloseButton.MouseButton1Click:Connect(cleanup))
 track(SpeedToggle.MouseButton1Click:Connect(function()
     state.speedEnabled = not state.speedEnabled
 
+    local _, humanoid = getCharacterParts()
+
     if state.speedEnabled then
         state.speedValue = clampNumber(SpeedBox.Text, 16, 0, 200)
         SpeedBox.Text = tostring(state.speedValue)
+
+        if humanoid then
+            humanoid.WalkSpeed = state.speedValue
+        end
+    elseif humanoid then
+        humanoid.WalkSpeed = defaultWalkSpeed
     end
 
     setButtonState(SpeedToggle, state.speedEnabled, "ON", "OFF")
@@ -1019,9 +1039,19 @@ end))
 track(JumpToggle.MouseButton1Click:Connect(function()
     state.jumpEnabled = not state.jumpEnabled
 
+    local _, humanoid = getCharacterParts()
+
     if state.jumpEnabled then
         state.jumpValue = clampNumber(JumpBox.Text, 50, 0, 300)
         JumpBox.Text = tostring(state.jumpValue)
+
+        if humanoid then
+            humanoid.UseJumpPower = true
+            humanoid.JumpPower = state.jumpValue
+        end
+    elseif humanoid then
+        humanoid.UseJumpPower = true
+        humanoid.JumpPower = defaultJumpPower
     end
 
     setButtonState(JumpToggle, state.jumpEnabled, "ON", "OFF")
@@ -1302,13 +1332,3 @@ bindCameraResize()
 centerMainFrame()
 
 print("Menu de test chargé correctement.")
-'''
-
-lua_path = Path("/mnt/data/Menu_Roblox_corrige.lua")
-txt_path = Path("/mnt/data/Menu_Roblox_corrige.txt")
-lua_path.write_text(script, encoding="utf-8")
-txt_path.write_text(script, encoding="utf-8")
-
-print(f"Créé : {lua_path}")
-print(f"Créé : {txt_path}")
-print(f"{len(script.splitlines())} lignes")
