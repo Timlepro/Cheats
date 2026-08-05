@@ -33,7 +33,7 @@ local Scripts = {
     },
     {
         Name = "Vide",
-        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/none",
+        Url = "https://raw.githubusercontent.com/codexvsberserkerxylo/scripts/refs/heads/main/onetap.luau",
         requirePlaceId = false,
         PlaceIds = {}
     },
