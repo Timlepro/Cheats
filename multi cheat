@@ -32,10 +32,10 @@ local Scripts = {
         PlaceIds = {13822889}
     },
     {
-        Name = "One Tap",
-        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/OneTap",
-        requirePlaceId = true,
-        PlaceIds = {85207102870777}
+        Name = "none",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/none",
+        requirePlaceId = false,
+        PlaceIds = {}
     },
 }
 
