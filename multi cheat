@@ -32,10 +32,10 @@ local Scripts = {
         PlaceIds = {13822889}
     },
     {
-        Name = "One Tap",
-        Url = "https://raw.githubusercontent.com/plalettescripts/one-tap-script/refs/heads/main/loader.lua",
-        requirePlaceId = false,
-        PlaceIds = {}
+        Name = "Atlas",
+        Url = "https://raw.githubusercontent.com/Chris12089/atlasbss/main/script.lua",
+        requirePlaceId = true,
+        PlaceIds = {1537690962}
     },
 }
 
