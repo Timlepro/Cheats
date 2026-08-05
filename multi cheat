@@ -32,9 +32,9 @@ local Scripts = {
         PlaceIds = {13822889}
     },
     {
-        Name = "Vide",
+        Name = "One Tap",
         Url = "https://raw.githubusercontent.com/codexvsberserkerxylo/scripts/refs/heads/main/onetap.luau",
-        requirePlaceId = false,
+        requirePlaceId = true,
         PlaceIds = {}
     },
 }
