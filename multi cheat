@@ -33,9 +33,9 @@ local Scripts = {
     },
     {
         Name = "One Tap",
-        Url = "https://raw.githubusercontent.com/codexvsberserkerxylo/scripts/refs/heads/main/onetap.luau",
+        Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/OneTap",
         requirePlaceId = true,
-        PlaceIds = {}
+        PlaceIds = {85207102870777}
     },
 }
 
