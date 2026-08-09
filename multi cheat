@@ -3,6 +3,7 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local TextChatService = game:GetService("TextChatService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -489,11 +490,12 @@ FloatButton.Position = UDim2.fromOffset(
     FLOAT_MARGIN + FLOAT_BUTTON_SIZE / 2
 )
 FloatButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-FloatButton.BackgroundTransparency = 0.2
+FloatButton.BackgroundTransparency = 0.1
 FloatButton.BorderSizePixel = 1
 FloatButton.BorderColor3 = Color3.fromRGB(60, 60, 70)
-FloatButton.Image = "rbxassetid://7072718680"
-FloatButton.ImageColor3 = Color3.fromRGB(200, 200, 220)
+FloatButton.Image = ""
+FloatButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+FloatButton.ScaleType = Enum.ScaleType.Crop
 FloatButton.Visible = START_MINIMIZED
 FloatButton.Active = true
 FloatButton.AutoButtonColor = false
@@ -501,19 +503,28 @@ FloatButton.ZIndex = 10
 FloatButton.Parent = ScreenGui
 
 local FloatCorner = Instance.new("UICorner")
-FloatCorner.CornerRadius = UDim.new(0, 12)
+FloatCorner.CornerRadius = UDim.new(1, 0)
 FloatCorner.Parent = FloatButton
 
-local FloatLabel = Instance.new("TextLabel")
-FloatLabel.Name = "FloatLabel"
-FloatLabel.Size = UDim2.new(1, 0, 1, 0)
-FloatLabel.BackgroundTransparency = 1
-FloatLabel.Text = "📁"
-FloatLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
-FloatLabel.TextSize = 18
-FloatLabel.Font = Enum.Font.GothamBold
-FloatLabel.ZIndex = 11
-FloatLabel.Parent = FloatButton
+-- Avatar du joueur sur la popup minimisée.
+task.spawn(function()
+    local thumbnailSuccess, thumbnailContent = pcall(function()
+        local content = Players:GetUserThumbnailAsync(
+            LocalPlayer.UserId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size150x150
+        )
+
+        return content
+    end)
+
+    if thumbnailSuccess and thumbnailContent then
+        FloatButton.Image = thumbnailContent
+    else
+        -- Icône de secours si Roblox ne renvoie pas l'avatar.
+        FloatButton.Image = "rbxassetid://7072718680"
+    end
+end)
 
 local function ClampFloatCenter(position)
     local viewportSize = GetViewportSize()
@@ -567,6 +578,24 @@ local function SetFloatCenter(position)
         math.clamp(clampedPosition.X / viewportSize.X, 0, 1),
         math.clamp(clampedPosition.Y / viewportSize.Y, 0, 1)
     )
+end
+
+-- Réinitialise UNIQUEMENT la position de la popup minimisée.
+-- La grande fenêtre MainFrame n'est jamais déplacée par cette fonction.
+local function ResetFloatPosition()
+    local viewportSize = GetViewportSize()
+
+    SetFloatCenter(Vector2.new(
+        viewportSize.X / 2,
+        FLOAT_MARGIN + FLOAT_BUTTON_SIZE / 2
+    ))
+
+    SavedFloatPosition = {
+        CenterX = CurrentFloatNormalized.X,
+        CenterY = CurrentFloatNormalized.Y
+    }
+
+    SaveToggles()
 end
 
 ApplyLoadedFloatPosition = function()
@@ -1534,8 +1563,75 @@ task.spawn(function()
     ExecuteAutoScripts()
 end)
 
+-- ===== COMMANDE /reset pose =====
+
+local LastResetPoseTime = 0
+
+local function HandleResetPoseCommand(message)
+    if type(message) ~= "string" then
+        return
+    end
+
+    local normalizedMessage = string.lower(message)
+    normalizedMessage = normalizedMessage:gsub("^%s+", ""):gsub("%s+$", "")
+    normalizedMessage = normalizedMessage:gsub("%s+", " ")
+
+    if normalizedMessage ~= "/reset pose"
+        and normalizedMessage ~= "/resetpose" then
+        return
+    end
+
+    -- Évite une double exécution si TextChatCommand et Chatted
+    -- détectent tous les deux la même commande.
+    local now = tick()
+
+    if now - LastResetPoseTime < 0.25 then
+        return
+    end
+
+    LastResetPoseTime = now
+    ResetFloatPosition()
+end
+
+-- Nouveau système de chat Roblox.
+local TextChatCommandCreated = false
+
+pcall(function()
+    local oldCommand = TextChatService:FindFirstChild(
+        "ScriptExecutorResetPoseCommand"
+    )
+
+    if oldCommand then
+        oldCommand:Destroy()
+    end
+
+    local ResetPoseCommand = Instance.new("TextChatCommand")
+    ResetPoseCommand.Name = "ScriptExecutorResetPoseCommand"
+    ResetPoseCommand.PrimaryAlias = "/reset"
+    ResetPoseCommand.SecondaryAlias = "/resetpose"
+    ResetPoseCommand.AutocompleteVisible = true
+    ResetPoseCommand.Enabled = true
+    ResetPoseCommand.Parent = TextChatService
+
+    ResetPoseCommand.Triggered:Connect(function(textSource, unfilteredText)
+        if textSource and textSource.UserId ~= LocalPlayer.UserId then
+            return
+        end
+
+        HandleResetPoseCommand(unfilteredText)
+    end)
+
+    TextChatCommandCreated = true
+end)
+
+-- Compatibilité avec l'ancien chat / certains exécuteurs.
+LocalPlayer.Chatted:Connect(function(message)
+    HandleResetPoseCommand(message)
+end)
+
 _G.ShowScriptExecutor = ShowWindow
 _G.CloseScriptExecutor = CloseWindow
 _G.ExecuteAutoScripts = ExecuteAutoScripts
 _G.SaveToggles = SaveToggles
 _G.LoadToggles = ReloadToggles
+_G.ResetScriptExecutorFloatPosition = ResetFloatPosition
