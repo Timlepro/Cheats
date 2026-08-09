@@ -37,6 +37,12 @@ local Scripts = {
         requirePlaceId = true,
         PlaceIds = {1537690962}
     },
+    {
+        Name = "Bonk & Blast",
+        Url = "https://raw.githubusercontent.com/sagor112233829/Bonk-and-block-script-/refs/heads/main/obfuscated_script-1779031691005.lua.txt",
+        requirePlaceId = false,
+        PlaceIds = {}
+    },
 }
 
 local configFile = "ScriptExecutor_Config.json"
