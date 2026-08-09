@@ -44,6 +44,12 @@ local Scripts = {
         requirePlaceId = false,
         PlaceIds = {}
     },
+    {
+        Name = "Rivals",
+        Url = "https://raw.githubusercontent.com/MinimalScriptingService/MinimalRivals/main/rivals.lua",
+        requirePlaceId = false,
+        PlaceIds = {}
+    },
 }
 
 local configFile = "ScriptExecutor_Config.json"
