@@ -46,7 +46,7 @@ local Scripts = {
     },
     {
         Name = "Rivals",
-        Url = "https://raw.githubusercontent.com/MinimalScriptingService/MinimalRivals/main/rivals.lua",
+        Url = "https://raw.githubusercontent.com/tbao143/thaibao/main/TbaoHubRivals",
         requirePlaceId = false,
         PlaceIds = {}
     },
