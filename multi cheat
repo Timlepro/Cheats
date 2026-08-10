@@ -4,6 +4,7 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local TextChatService = game:GetService("TextChatService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -66,6 +67,70 @@ local FLOAT_MARGIN = 8
 local FLOAT_DRAG_DISTANCE = 6
 
 local CurrentPlaceId = game.PlaceId
+
+-- La catégorie est maintenant déterminée UNIQUEMENT par PlaceIds :
+-- PlaceIds = {123456}  -> onglet Jeux
+-- PlaceIds = {}        -> onglet Universel
+local function HasPlaceIds(scriptData)
+    return type(scriptData.PlaceIds) == "table"
+        and #scriptData.PlaceIds > 0
+end
+
+local PlaceNameCache = {}
+
+local function GetPlaceName(placeId)
+    placeId = tonumber(placeId)
+
+    if not placeId then
+        return "Jeu inconnu"
+    end
+
+    if PlaceNameCache[placeId] then
+        return PlaceNameCache[placeId]
+    end
+
+    local success, info = pcall(function()
+        return MarketplaceService:GetProductInfo(
+            placeId,
+            Enum.InfoType.Asset
+        )
+    end)
+
+    local placeName
+
+    if success
+        and type(info) == "table"
+        and type(info.Name) == "string"
+        and info.Name ~= "" then
+
+        placeName = info.Name
+    else
+        placeName = "Jeu #" .. tostring(placeId)
+    end
+
+    PlaceNameCache[placeId] = placeName
+    return placeName
+end
+
+local function GetScriptGameNames(scriptData)
+    if not HasPlaceIds(scriptData) then
+        return {}
+    end
+
+    local names = {}
+    local alreadyAdded = {}
+
+    for _, placeId in ipairs(scriptData.PlaceIds) do
+        local name = GetPlaceName(placeId)
+
+        if not alreadyAdded[name] then
+            alreadyAdded[name] = true
+            table.insert(names, name)
+        end
+    end
+
+    return names
+end
 
 local ScriptToggles = {}
 local ExecutedScripts = {}
@@ -241,12 +306,12 @@ local IsSmallScreen = GetViewportSize().X < 600
 local function GetAdaptiveSize()
     local screenSize = GetViewportSize()
 
-    local width = math.min(420, screenSize.X * 0.9)
-    local height = math.min(600, screenSize.Y * 0.85)
+    local width = math.min(400, screenSize.X * 0.94)
+    local height = math.min(500, screenSize.Y * 0.88)
 
     if IsMobile or IsSmallScreen then
-        width = math.min(370, screenSize.X * 0.92)
-        height = math.min(550, screenSize.Y * 0.8)
+        width = math.min(380, screenSize.X * 0.94)
+        height = math.min(500, screenSize.Y * 0.84)
     end
 
     return width, height
@@ -254,26 +319,33 @@ end
 
 local function GetAdaptiveFontSize()
     if IsMobile or IsSmallScreen then
+        return 15
+    end
+
+    return 19
+end
+
+local function GetSmallFontSize()
+    if IsMobile or IsSmallScreen then
+        return 12
+    end
+
+    return 14
+end
+
+local function GetButtonFontSize()
+    if IsMobile or IsSmallScreen then
         return 13
     end
 
-    return 17
-end
-
-local function GetAdaptiveButtonSize()
-    if IsMobile or IsSmallScreen then
-        return 60, 26
-    end
-
-    return 70, 30
+    return 15
 end
 
 MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-MainFrame.BackgroundTransparency = 0.95
-MainFrame.BorderSizePixel = 1
-MainFrame.BorderColor3 = Color3.fromRGB(60, 60, 70)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+MainFrame.BackgroundTransparency = 0.3
+MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
 MainFrame.Visible = not START_MINIMIZED
 MainFrame.ZIndex = 10
@@ -296,8 +368,7 @@ UpdateMainFrameSize()
 local GlassEffect = Instance.new("Frame")
 GlassEffect.Name = "GlassEffect"
 GlassEffect.Size = UDim2.new(1, 0, 1, 0)
-GlassEffect.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-GlassEffect.BackgroundTransparency = 0.3
+GlassEffect.BackgroundTransparency = 1
 GlassEffect.BorderSizePixel = 0
 GlassEffect.ZIndex = 1
 GlassEffect.Parent = MainFrame
@@ -308,75 +379,74 @@ Corner.Parent = MainFrame
 
 TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 45)
-TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-TitleBar.BackgroundTransparency = 0.5
+TitleBar.Size = UDim2.new(1, 0, 0, 50)
+TitleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+TitleBar.BackgroundTransparency = 0.4
 TitleBar.BorderSizePixel = 0
 TitleBar.Active = true
 TitleBar.ZIndex = 2
 TitleBar.Parent = MainFrame
 
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 10)
-TitleCorner.Parent = TitleBar
-
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
-Title.Size = UDim2.new(0.55, 0, 1, 0)
-Title.Position = UDim2.new(0.05, 0, 0, 0)
+Title.Size = UDim2.new(0.61, 0, 1, 0)
+Title.Position = UDim2.new(0.02, 0, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "📁 Exécuteur de Scripts"
-Title.TextColor3 = Color3.fromRGB(220, 220, 230)
-Title.TextSize = GetAdaptiveFontSize()
+Title.Text = "📁 Multi Cheats"
+Title.TextColor3 = Color3.fromRGB(220, 220, 235)
+Title.TextSize = IsMobile and 20 or 26
+Title.TextWrapped = true
 Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.TextYAlignment = Enum.TextYAlignment.Center
 Title.Font = Enum.Font.GothamBold
 Title.ZIndex = 3
 Title.Parent = TitleBar
 
 local MinimizeButton = Instance.new("TextButton")
 MinimizeButton.Name = "MinimizeButton"
-MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
-MinimizeButton.Position = UDim2.new(1, -80, 0, 7)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(200, 200, 50)
-MinimizeButton.BackgroundTransparency = 0.3
+MinimizeButton.Size = UDim2.new(0, 40, 0, 40)
+MinimizeButton.Position = UDim2.new(1, -92, 0, 5)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(255, 255, 80)
+MinimizeButton.BackgroundTransparency = 0.5
 MinimizeButton.BorderSizePixel = 0
 MinimizeButton.Text = "−"
 MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeButton.TextSize = 22
+MinimizeButton.TextSize = 25
 MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.AutoButtonColor = false
 MinimizeButton.ZIndex = 3
 MinimizeButton.Parent = TitleBar
 
 local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 5)
+MinCorner.CornerRadius = UDim.new(0, 8)
 MinCorner.Parent = MinimizeButton
 
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
-CloseButton.Size = UDim2.new(0, 30, 0, 30)
-CloseButton.Position = UDim2.new(1, -40, 0, 7)
-CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseButton.BackgroundTransparency = 0.3
+CloseButton.Size = UDim2.new(0, 40, 0, 40)
+CloseButton.Position = UDim2.new(1, -46, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+CloseButton.BackgroundTransparency = 0.5
 CloseButton.BorderSizePixel = 0
 CloseButton.Text = "X"
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.TextSize = 18
+CloseButton.TextSize = 25
 CloseButton.Font = Enum.Font.GothamBold
+CloseButton.AutoButtonColor = false
 CloseButton.ZIndex = 3
 CloseButton.Parent = TitleBar
 
 local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 5)
+CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseButton
 
 if not IsMobile then
     MinimizeButton.MouseEnter:Connect(function()
         TweenService:Create(
             MinimizeButton,
-            TweenInfo.new(0.2),
+            TweenInfo.new(0.18),
             {
-                BackgroundTransparency = 0.1,
-                BackgroundColor3 = Color3.fromRGB(255, 255, 50)
+                BackgroundTransparency = 0.25
             }
         ):Play()
     end)
@@ -384,10 +454,9 @@ if not IsMobile then
     MinimizeButton.MouseLeave:Connect(function()
         TweenService:Create(
             MinimizeButton,
-            TweenInfo.new(0.2),
+            TweenInfo.new(0.18),
             {
-                BackgroundTransparency = 0.3,
-                BackgroundColor3 = Color3.fromRGB(200, 200, 50)
+                BackgroundTransparency = 0.5
             }
         ):Play()
     end)
@@ -395,10 +464,9 @@ if not IsMobile then
     CloseButton.MouseEnter:Connect(function()
         TweenService:Create(
             CloseButton,
-            TweenInfo.new(0.2),
+            TweenInfo.new(0.18),
             {
-                BackgroundTransparency = 0.1,
-                BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+                BackgroundTransparency = 0.25
             }
         ):Play()
     end)
@@ -406,10 +474,9 @@ if not IsMobile then
     CloseButton.MouseLeave:Connect(function()
         TweenService:Create(
             CloseButton,
-            TweenInfo.new(0.2),
+            TweenInfo.new(0.18),
             {
-                BackgroundTransparency = 0.3,
-                BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+                BackgroundTransparency = 0.5
             }
         ):Play()
     end)
@@ -417,30 +484,100 @@ end
 
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Name = "ContentContainer"
-ContentContainer.Size = UDim2.new(1, 0, 1, -45)
-ContentContainer.Position = UDim2.new(0, 0, 0, 45)
+ContentContainer.Size = UDim2.new(1, 0, 1, -50)
+ContentContainer.Position = UDim2.new(0, 0, 0, 50)
 ContentContainer.BackgroundTransparency = 1
+ContentContainer.BorderSizePixel = 0
 ContentContainer.ZIndex = 2
 ContentContainer.Parent = MainFrame
 
+local Category = Instance.new("Frame")
+Category.Name = "Category"
+Category.Size = UDim2.new(1, 0, 0, 60)
+Category.Position = UDim2.new(0, 0, 0, 0)
+Category.BackgroundTransparency = 1
+Category.BorderSizePixel = 0
+Category.ZIndex = 2
+Category.Parent = ContentContainer
+
+local CategoryJeuxButton = Instance.new("TextButton")
+CategoryJeuxButton.Name = "Jeux"
+CategoryJeuxButton.AnchorPoint = Vector2.new(0.5, 0.5)
+CategoryJeuxButton.Position = UDim2.new(0.25, 0, 0.5, 0)
+CategoryJeuxButton.Size = UDim2.new(0.45, 0, 0, 50)
+CategoryJeuxButton.BackgroundColor3 = Color3.fromRGB(0, 175, 255)
+CategoryJeuxButton.BackgroundTransparency = 0.5
+CategoryJeuxButton.BorderSizePixel = 0
+CategoryJeuxButton.Text = "Jeux"
+CategoryJeuxButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CategoryJeuxButton.TextSize = IsMobile and 20 or 25
+CategoryJeuxButton.Font = Enum.Font.SourceSansBold
+CategoryJeuxButton.AutoButtonColor = false
+CategoryJeuxButton.ZIndex = 3
+CategoryJeuxButton.Parent = Category
+
+local CategoryJeuxCorner = Instance.new("UICorner")
+CategoryJeuxCorner.CornerRadius = UDim.new(0, 10)
+CategoryJeuxCorner.Parent = CategoryJeuxButton
+
+local CategoryJeuxStroke = Instance.new("UIStroke")
+CategoryJeuxStroke.Thickness = 1
+CategoryJeuxStroke.Color = Color3.fromRGB(0, 0, 0)
+CategoryJeuxStroke.Transparency = 0.35
+CategoryJeuxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+CategoryJeuxStroke.Parent = CategoryJeuxButton
+
+local CategoryUniverselButton = Instance.new("TextButton")
+CategoryUniverselButton.Name = "Universel"
+CategoryUniverselButton.AnchorPoint = Vector2.new(0.5, 0.5)
+CategoryUniverselButton.Position = UDim2.new(0.75, 0, 0.5, 0)
+CategoryUniverselButton.Size = UDim2.new(0.45, 0, 0, 50)
+CategoryUniverselButton.BackgroundColor3 = Color3.fromRGB(163, 162, 165)
+CategoryUniverselButton.BackgroundTransparency = 0.5
+CategoryUniverselButton.BorderSizePixel = 0
+CategoryUniverselButton.Text = "Universel"
+CategoryUniverselButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CategoryUniverselButton.TextSize = IsMobile and 20 or 25
+CategoryUniverselButton.Font = Enum.Font.SourceSansBold
+CategoryUniverselButton.AutoButtonColor = false
+CategoryUniverselButton.ZIndex = 3
+CategoryUniverselButton.Parent = Category
+
+local CategoryUniverselCorner = Instance.new("UICorner")
+CategoryUniverselCorner.CornerRadius = UDim.new(0, 10)
+CategoryUniverselCorner.Parent = CategoryUniverselButton
+
+local CategoryUniverselStroke = Instance.new("UIStroke")
+CategoryUniverselStroke.Thickness = 1
+CategoryUniverselStroke.Color = Color3.fromRGB(0, 0, 0)
+CategoryUniverselStroke.Transparency = 0.35
+CategoryUniverselStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+CategoryUniverselStroke.Parent = CategoryUniverselButton
+
+local CurrentCategory = "Jeux"
+
 ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Name = "ScrollFrame"
-ScrollFrame.Size = UDim2.new(0.95, 0, 0.9, 0)
-ScrollFrame.Position = UDim2.new(0.025, 0, 0.05, 0)
+ScrollFrame.Size = UDim2.new(1, 0, 1, -60)
+ScrollFrame.Position = UDim2.new(0, 0, 0, 60)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-ScrollFrame.ScrollBarThickness = 6
-ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 80)
+ScrollFrame.ScrollBarThickness = 5
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(55, 55, 75)
+ScrollFrame.ScrollBarImageTransparency = 0
+ScrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
 ScrollFrame.ZIndex = 2
 ScrollFrame.Parent = ContentContainer
 
 local ScriptList = Instance.new("UIListLayout")
-ScriptList.Padding = UDim.new(0, 8)
+ScriptList.Padding = UDim.new(0, 9)
 ScriptList.SortOrder = Enum.SortOrder.LayoutOrder
+ScriptList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ScriptList.VerticalAlignment = Enum.VerticalAlignment.Top
 ScriptList.Parent = ScrollFrame
 
-local MainDragging = false
+local MainDragging = falselocal MainDragging = false
 local MainDragStart = nil
 local MainStartPosition = nil
 
@@ -503,8 +640,11 @@ FloatButton.Position = UDim2.fromOffset(
 )
 FloatButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 FloatButton.BackgroundTransparency = 0.1
-FloatButton.BorderSizePixel = 1
-FloatButton.BorderColor3 = Color3.fromRGB(60, 60, 70)
+
+-- Pas de BorderSizePixel : la bordure Roblox classique reste carrée
+-- et ne suit pas correctement les coins arrondis.
+FloatButton.BorderSizePixel = 0
+
 FloatButton.Image = ""
 FloatButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
 FloatButton.ScaleType = Enum.ScaleType.Crop
@@ -514,9 +654,19 @@ FloatButton.AutoButtonColor = false
 FloatButton.ZIndex = 10
 FloatButton.Parent = ScreenGui
 
+-- Carré avec coins arrondis (PAS un cercle).
 local FloatCorner = Instance.new("UICorner")
-FloatCorner.CornerRadius = UDim.new(1, 0)
+FloatCorner.CornerRadius = UDim.new(0, 12)
 FloatCorner.Parent = FloatButton
+
+-- Bordure qui suit réellement les coins arrondis.
+local FloatStroke = Instance.new("UIStroke")
+FloatStroke.Name = "FloatStroke"
+FloatStroke.Thickness = 1
+FloatStroke.Color = Color3.fromRGB(60, 60, 70)
+FloatStroke.Transparency = 0
+FloatStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+FloatStroke.Parent = FloatButton
 
 -- Avatar du joueur sur la popup minimisée.
 task.spawn(function()
@@ -863,26 +1013,18 @@ local function ShouldAutoExecute(scriptData, index)
         return false
     end
 
-    if scriptData.requirePlaceId then
-        if type(scriptData.PlaceIds) ~= "table"
-            or #scriptData.PlaceIds == 0 then
-            return false
-        end
-
-        local placeMatches = false
-
+    -- Un script avec au moins un PlaceId est limité à ces jeux.
+    if HasPlaceIds(scriptData) then
         for _, placeId in ipairs(scriptData.PlaceIds) do
             if tonumber(placeId) == tonumber(CurrentPlaceId) then
-                placeMatches = true
-                break
+                return true
             end
         end
 
-        if not placeMatches then
-            return false
-        end
+        return false
     end
 
+    -- Aucun PlaceId = script universel.
     return true
 end
 
@@ -952,7 +1094,7 @@ local function ExecuteAutoScripts()
                 SetAutoIndicator(
                     i,
                     "✅ Exécuté",
-                    Color3.fromRGB(0, 255, 0)
+                    Color3.fromRGB(90, 255, 120)
                 )
             else
                 ExecutedScripts[i] = false
@@ -977,181 +1119,206 @@ end
 local function CreateScriptItem(scriptData, index)
     local ItemFrame = Instance.new("Frame")
     ItemFrame.Name = "ScriptItem_" .. index
-    ItemFrame.Size = UDim2.new(1, -10, 0, 75)
-    ItemFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    ItemFrame.Size = UDim2.new(0.95, 0, 0, 84)
+    ItemFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
     ItemFrame.BackgroundTransparency = 0.3
-    ItemFrame.BorderSizePixel = 1
-    ItemFrame.BorderColor3 = Color3.fromRGB(50, 50, 65)
+    ItemFrame.BorderSizePixel = 0
     ItemFrame.ZIndex = 2
     ItemFrame.Parent = ScrollFrame
 
     local ItemCorner = Instance.new("UICorner")
-    ItemCorner.CornerRadius = UDim.new(0, 6)
+    ItemCorner.CornerRadius = UDim.new(0, 8)
     ItemCorner.Parent = ItemFrame
+
+    local ItemStroke = Instance.new("UIStroke")
+    ItemStroke.Thickness = 1
+    ItemStroke.Color = Color3.fromRGB(55, 55, 75)
+    ItemStroke.Transparency = 0.15
+    ItemStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    ItemStroke.Parent = ItemFrame
 
     local ScriptName = Instance.new("TextLabel")
     ScriptName.Name = "ScriptName"
-    ScriptName.Size = UDim2.new(0.4, 0, 0.4, 0)
-    ScriptName.Position = UDim2.new(0.05, 0, 0.05, 0)
+    ScriptName.Size = UDim2.new(0.45, 0, 0.35, 0)
+    ScriptName.Position = UDim2.new(0.024, 0, 0.013, 0)
     ScriptName.BackgroundTransparency = 1
+    ScriptName.BorderSizePixel = 0
     ScriptName.Text = scriptData.Name
-    ScriptName.TextColor3 = Color3.fromRGB(200, 200, 220)
+    ScriptName.TextColor3 = Color3.fromRGB(220, 220, 235)
     ScriptName.TextSize = GetAdaptiveFontSize()
+    ScriptName.TextWrapped = true
     ScriptName.TextXAlignment = Enum.TextXAlignment.Left
+    ScriptName.TextYAlignment = Enum.TextYAlignment.Center
     ScriptName.Font = Enum.Font.GothamBold
     ScriptName.ZIndex = 3
     ScriptName.Parent = ItemFrame
 
     local PlaceInfo = Instance.new("TextLabel")
     PlaceInfo.Name = "PlaceInfo"
-    PlaceInfo.Size = UDim2.new(0.4, 0, 0.35, 0)
-    PlaceInfo.Position = UDim2.new(0.05, 0, 0.5, 0)
+    PlaceInfo.Size = UDim2.new(0.40, 0, 0.36, 0)
+    PlaceInfo.Position = UDim2.new(0.024, 0, 0.636, 0)
     PlaceInfo.BackgroundTransparency = 1
+    PlaceInfo.BorderSizePixel = 0
 
-    if scriptData.requirePlaceId
-        and type(scriptData.PlaceIds) == "table"
-        and #scriptData.PlaceIds > 0 then
+    if HasPlaceIds(scriptData) then
+        PlaceInfo.Text = "🎮 Chargement du jeu..."
 
-        PlaceInfo.Text =
-            "📌 IDs: " .. table.concat(scriptData.PlaceIds, ", ")
+        -- Le nom est récupéré sans bloquer la création de l'interface.
+        task.spawn(function()
+            local gameNames = GetScriptGameNames(scriptData)
 
-        PlaceInfo.TextColor3 =
-            Color3.fromRGB(150, 150, 170)
-    elseif scriptData.requirePlaceId then
-        PlaceInfo.Text = "⚠️ Aucun ID défini"
-        PlaceInfo.TextColor3 =
-            Color3.fromRGB(255, 200, 50)
+            if not PlaceInfo or not PlaceInfo.Parent then
+                return
+            end
+
+            if #gameNames == 0 then
+                PlaceInfo.Text = "🎮 Jeu inconnu"
+            elseif #gameNames == 1 then
+                PlaceInfo.Text = "🎮 " .. gameNames[1]
+            else
+                PlaceInfo.Text = "🎮 " .. table.concat(gameNames, " / ")
+            end
+        end)
     else
-        PlaceInfo.Text = "🌍 Tous les jeux"
-        PlaceInfo.TextColor3 =
-            Color3.fromRGB(100, 200, 255)
+        PlaceInfo.Text = "🌍 Universel"
     end
 
-    PlaceInfo.TextSize = GetAdaptiveFontSize() - 5
+    PlaceInfo.TextColor3 = Color3.fromRGB(220, 220, 235)
+    PlaceInfo.TextSize = GetButtonFontSize()
+    PlaceInfo.TextWrapped = true
     PlaceInfo.TextXAlignment = Enum.TextXAlignment.Left
-    PlaceInfo.Font = Enum.Font.GothamMedium
+    PlaceInfo.TextYAlignment = Enum.TextYAlignment.Center
+    PlaceInfo.Font = Enum.Font.GothamBold
     PlaceInfo.ZIndex = 3
     PlaceInfo.Parent = ItemFrame
 
+    local AutoExeLabel = Instance.new("TextLabel")
+    AutoExeLabel.Name = "AutoExeLabel"
+    AutoExeLabel.Size = UDim2.new(0.237, 0, 0.303, 0)
+    AutoExeLabel.Position = UDim2.new(0.471, 0, 0.06, 0)
+    AutoExeLabel.BackgroundTransparency = 1
+    AutoExeLabel.BorderSizePixel = 0
+    AutoExeLabel.Text = "Auto Execute"
+    AutoExeLabel.TextColor3 = Color3.fromRGB(220, 220, 235)
+    AutoExeLabel.TextSize = GetSmallFontSize()
+    AutoExeLabel.TextWrapped = true
+    AutoExeLabel.TextXAlignment = Enum.TextXAlignment.Center
+    AutoExeLabel.TextYAlignment = Enum.TextYAlignment.Center
+    AutoExeLabel.Font = Enum.Font.GothamBold
+    AutoExeLabel.ZIndex = 3
+    AutoExeLabel.Parent = ItemFrame
+
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Name = "ToggleButton"
-    ToggleButton.Size = UDim2.new(0, 75, 0, 26)
-    ToggleButton.Position = UDim2.new(0.5, -37.5, 0.5, -13)
-    ToggleButton.BackgroundColor3 =
-        ScriptToggles[index]
-        and Color3.fromRGB(40, 180, 80)
-        or Color3.fromRGB(180, 40, 40)
-
-    ToggleButton.BackgroundTransparency = 0.2
-    ToggleButton.BorderSizePixel = 1
-    ToggleButton.BorderColor3 =
-        ScriptToggles[index]
-        and Color3.fromRGB(40, 180, 80)
-        or Color3.fromRGB(180, 40, 40)
-
-    ToggleButton.Text =
-        ScriptToggles[index]
-        and "✅ ACTIVÉ"
-        or "❌ DÉSACTIVÉ"
-
-    ToggleButton.TextColor3 =
-        ScriptToggles[index]
-        and Color3.fromRGB(180, 255, 200)
-        or Color3.fromRGB(255, 180, 180)
-
-    ToggleButton.TextSize = GetAdaptiveFontSize() - 4
-    ToggleButton.Font = Enum.Font.GothamBold
+    ToggleButton.Size = UDim2.new(0.1842, 0, 0.353, 0)
+    ToggleButton.Position = UDim2.new(0.5, 0, 0.406, 0)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    ToggleButton.BackgroundTransparency = 0.3
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Text = ""
     ToggleButton.AutoButtonColor = false
     ToggleButton.ZIndex = 3
     ToggleButton.Parent = ItemFrame
 
     local ToggleCorner = Instance.new("UICorner")
-    ToggleCorner.CornerRadius = UDim.new(0, 5)
+    ToggleCorner.CornerRadius = UDim.new(1, 0)
     ToggleCorner.Parent = ToggleButton
+
+    local ToggleStroke = Instance.new("UIStroke")
+    ToggleStroke.Name = "ToggleStroke"
+    ToggleStroke.Thickness = 1
+    ToggleStroke.Color = Color3.fromRGB(255, 80, 80)
+    ToggleStroke.Transparency = 0.25
+    ToggleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    ToggleStroke.Parent = ToggleButton
+
+    local ToggleBall = Instance.new("Frame")
+    ToggleBall.Name = "ToggleBall"
+    ToggleBall.Size = UDim2.new(0.3143, 0, 0.7333, 0)
+    ToggleBall.Position = UDim2.new(0.057, 0, 0.133, 0)
+    ToggleBall.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleBall.BackgroundTransparency = 0.1
+    ToggleBall.BorderSizePixel = 0
+    ToggleBall.ZIndex = 4
+    ToggleBall.Parent = ToggleButton
+
+    local ToggleBallCorner = Instance.new("UICorner")
+    ToggleBallCorner.CornerRadius = UDim.new(1, 0)
+    ToggleBallCorner.Parent = ToggleBall
 
     local AutoIndicator = Instance.new("TextLabel")
     AutoIndicator.Name = "AutoIndicator"
-    AutoIndicator.Size = UDim2.new(0.22, 0, 0.3, 0)
-    AutoIndicator.Position = UDim2.new(0.74, 0, 0.55, 0)
+    AutoIndicator.Size = UDim2.new(0.266, 0, 0.238, 0)
+    AutoIndicator.Position = UDim2.new(0.721, 0, 0.759, 0)
     AutoIndicator.BackgroundTransparency = 1
-    AutoIndicator.Text = "⏳ En attente"
-    AutoIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
-    AutoIndicator.TextSize = GetAdaptiveFontSize() - 5
+    AutoIndicator.BorderSizePixel = 0
+    AutoIndicator.Text = ExecutedScripts[index] and "✅ Exécuté" or "⏳ En attente"
+    AutoIndicator.TextColor3 = ExecutedScripts[index]
+        and Color3.fromRGB(90, 255, 120)
+        or Color3.fromRGB(160, 160, 180)
+    AutoIndicator.TextSize = GetSmallFontSize()
+    AutoIndicator.TextWrapped = true
     AutoIndicator.TextXAlignment = Enum.TextXAlignment.Center
+    AutoIndicator.TextYAlignment = Enum.TextYAlignment.Center
     AutoIndicator.Font = Enum.Font.GothamMedium
     AutoIndicator.ZIndex = 3
     AutoIndicator.Parent = ItemFrame
 
     local ExecuteButton = Instance.new("TextButton")
     ExecuteButton.Name = "ExecuteButton"
-
-    local buttonWidth, buttonHeight =
-        GetAdaptiveButtonSize()
-
-    ExecuteButton.Size = UDim2.new(
-        0,
-        buttonWidth,
-        0,
-        buttonHeight
-    )
-
-    ExecuteButton.Position = UDim2.new(
-        0.78,
-        0,
-        0.15,
-        0
-    )
-
-    ExecuteButton.BackgroundColor3 =
-        Color3.fromRGB(40, 180, 80)
-
+    ExecuteButton.Size = UDim2.new(0.2632, 0, 0.5294, 0)
+    ExecuteButton.Position = UDim2.new(0.7212, 0, 0.2294, 0)
+    ExecuteButton.BackgroundColor3 = Color3.fromRGB(70, 180, 255)
     ExecuteButton.BackgroundTransparency = 0.2
     ExecuteButton.BorderSizePixel = 0
     ExecuteButton.Text = "▶ Exécuter"
-    ExecuteButton.TextColor3 =
-        Color3.fromRGB(180, 255, 200)
-
-    ExecuteButton.TextSize =
-        GetAdaptiveFontSize() - 4
-
+    ExecuteButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ExecuteButton.TextSize = GetButtonFontSize()
+    ExecuteButton.TextWrapped = true
     ExecuteButton.Font = Enum.Font.GothamBold
     ExecuteButton.AutoButtonColor = false
     ExecuteButton.ZIndex = 3
     ExecuteButton.Parent = ItemFrame
 
     local ButtonCorner = Instance.new("UICorner")
-    ButtonCorner.CornerRadius = UDim.new(0, 5)
+    ButtonCorner.CornerRadius = UDim.new(0, 9)
     ButtonCorner.Parent = ExecuteButton
 
-    local function RefreshToggleVisual()
-        if ScriptToggles[index] then
-            ToggleButton.Text = "✅ ACTIVÉ"
-            ToggleButton.BackgroundColor3 =
-                Color3.fromRGB(40, 180, 80)
+    local function RefreshToggleVisual(instant)
+        local enabled = ScriptToggles[index] == true
+        local targetColor = enabled
+            and Color3.fromRGB(85, 255, 0)
+            or Color3.fromRGB(255, 80, 80)
 
-            ToggleButton.BorderColor3 =
-                Color3.fromRGB(40, 180, 80)
+        local targetBallPosition = enabled
+            and UDim2.new(0.61, 0, 0.133, 0)
+            or UDim2.new(0.057, 0, 0.133, 0)
 
-            ToggleButton.TextColor3 =
-                Color3.fromRGB(180, 255, 200)
+        ToggleButton.BackgroundColor3 = targetColor
+        ToggleStroke.Color = targetColor
+
+        if instant then
+            ToggleBall.Position = targetBallPosition
         else
-            ToggleButton.Text = "❌ DÉSACTIVÉ"
-            ToggleButton.BackgroundColor3 =
-                Color3.fromRGB(180, 40, 40)
-
-            ToggleButton.BorderColor3 =
-                Color3.fromRGB(180, 40, 40)
-
-            ToggleButton.TextColor3 =
-                Color3.fromRGB(255, 180, 180)
+            TweenService:Create(
+                ToggleBall,
+                TweenInfo.new(
+                    0.18,
+                    Enum.EasingStyle.Quad,
+                    Enum.EasingDirection.Out
+                ),
+                {
+                    Position = targetBallPosition
+                }
+            ):Play()
         end
     end
 
-    ToggleButton.MouseButton1Click:Connect(function()
-        ScriptToggles[index] =
-            not ScriptToggles[index]
+    RefreshToggleVisual(true)
 
-        RefreshToggleVisual()
+    ToggleButton.MouseButton1Click:Connect(function()
+        ScriptToggles[index] = not ScriptToggles[index]
+        RefreshToggleVisual(false)
 
         if ScriptToggles[index] then
             ExecutedScripts[index] = false
@@ -1163,8 +1330,7 @@ local function CreateScriptItem(scriptData, index)
                     Color3.fromRGB(255, 200, 100)
                 )
 
-                local success, errorMessage =
-                    RunScript(index)
+                local success, errorMessage = RunScript(index)
 
                 if success then
                     ExecutedScripts[index] = true
@@ -1172,7 +1338,7 @@ local function CreateScriptItem(scriptData, index)
                     SetAutoIndicator(
                         index,
                         "✅ Exécuté",
-                        Color3.fromRGB(0, 255, 0)
+                        Color3.fromRGB(90, 255, 120)
                     )
                 else
                     ExecutedScripts[index] = false
@@ -1197,7 +1363,7 @@ local function CreateScriptItem(scriptData, index)
             SetAutoIndicator(
                 index,
                 "⏳ En attente",
-                Color3.fromRGB(200, 200, 200)
+                Color3.fromRGB(160, 160, 180)
             )
         end
 
@@ -1209,47 +1375,16 @@ local function CreateScriptItem(scriptData, index)
             return
         end
 
-        TweenService:Create(
-            ExecuteButton,
-            TweenInfo.new(0.1),
-            {
-                Size = UDim2.new(
-                    0,
-                    buttonWidth - 5,
-                    0,
-                    buttonHeight - 3
-                )
-            }
-        ):Play()
-
-        task.wait(0.1)
-
-        TweenService:Create(
-            ExecuteButton,
-            TweenInfo.new(0.1),
-            {
-                Size = UDim2.new(
-                    0,
-                    buttonWidth,
-                    0,
-                    buttonHeight
-                )
-            }
-        ):Play()
-
         local oldText = ExecuteButton.Text
 
         ExecuteButton.Text = "⏳..."
-        ExecuteButton.TextColor3 =
-            Color3.fromRGB(255, 200, 100)
+        ExecuteButton.TextColor3 = Color3.fromRGB(255, 235, 170)
 
-        local success, errorMessage =
-            RunScript(index)
+        local success, errorMessage = RunScript(index)
 
         if success then
             ExecuteButton.Text = "✅ Fait !"
-            ExecuteButton.TextColor3 =
-                Color3.fromRGB(0, 255, 0)
+            ExecuteButton.TextColor3 = Color3.fromRGB(180, 255, 190)
 
             if ScriptToggles[index]
                 and ShouldAutoExecute(scriptData, index) then
@@ -1259,15 +1394,14 @@ local function CreateScriptItem(scriptData, index)
                 SetAutoIndicator(
                     index,
                     "✅ Exécuté",
-                    Color3.fromRGB(0, 255, 0)
+                    Color3.fromRGB(90, 255, 120)
                 )
             end
 
             task.wait(0.5)
         else
             ExecuteButton.Text = "❌ Erreur"
-            ExecuteButton.TextColor3 =
-                Color3.fromRGB(255, 90, 90)
+            ExecuteButton.TextColor3 = Color3.fromRGB(255, 170, 170)
 
             if ScriptToggles[index] then
                 ExecutedScripts[index] = false
@@ -1290,17 +1424,16 @@ local function CreateScriptItem(scriptData, index)
         end
 
         ExecuteButton.Text = oldText
-        ExecuteButton.TextColor3 =
-            Color3.fromRGB(180, 255, 200)
+        ExecuteButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     end)
 
     if not IsMobile then
         ToggleButton.MouseEnter:Connect(function()
             TweenService:Create(
                 ToggleButton,
-                TweenInfo.new(0.2),
+                TweenInfo.new(0.15),
                 {
-                    BackgroundTransparency = 0.1
+                    BackgroundTransparency = 0.15
                 }
             ):Play()
         end)
@@ -1308,9 +1441,9 @@ local function CreateScriptItem(scriptData, index)
         ToggleButton.MouseLeave:Connect(function()
             TweenService:Create(
                 ToggleButton,
-                TweenInfo.new(0.2),
+                TweenInfo.new(0.15),
                 {
-                    BackgroundTransparency = 0.2
+                    BackgroundTransparency = 0.3
                 }
             ):Play()
         end)
@@ -1318,11 +1451,10 @@ local function CreateScriptItem(scriptData, index)
         ExecuteButton.MouseEnter:Connect(function()
             TweenService:Create(
                 ExecuteButton,
-                TweenInfo.new(0.2),
+                TweenInfo.new(0.15),
                 {
-                    BackgroundTransparency = 0.1,
-                    BackgroundColor3 =
-                        Color3.fromRGB(50, 220, 100)
+                    BackgroundTransparency = 0.05,
+                    BackgroundColor3 = Color3.fromRGB(90, 195, 255)
                 }
             ):Play()
         end)
@@ -1330,11 +1462,10 @@ local function CreateScriptItem(scriptData, index)
         ExecuteButton.MouseLeave:Connect(function()
             TweenService:Create(
                 ExecuteButton,
-                TweenInfo.new(0.2),
+                TweenInfo.new(0.15),
                 {
                     BackgroundTransparency = 0.2,
-                    BackgroundColor3 =
-                        Color3.fromRGB(40, 180, 80)
+                    BackgroundColor3 = Color3.fromRGB(70, 180, 255)
                 }
             ):Play()
         end)
@@ -1348,15 +1479,92 @@ for i = 1, #Scripts do
 end
 
 local function UpdateCanvasSize()
-    ScrollFrame.CanvasSize = UDim2.new(
-        0,
-        0,
-        0,
-        (#Scripts * 83) + 10
-    )
+    task.defer(function()
+        ScrollFrame.CanvasSize = UDim2.new(
+            0,
+            0,
+            0,
+            ScriptList.AbsoluteContentSize.Y + 10
+        )
+    end)
 end
 
-UpdateCanvasSize()
+local function RefreshCategoryButtons()
+    local jeuxSelected = CurrentCategory == "Jeux"
+
+    CategoryJeuxButton.BackgroundColor3 = jeuxSelected
+        and Color3.fromRGB(0, 175, 255)
+        or Color3.fromRGB(163, 162, 165)
+
+    CategoryUniverselButton.BackgroundColor3 = jeuxSelected
+        and Color3.fromRGB(163, 162, 165)
+        or Color3.fromRGB(0, 175, 255)
+end
+
+local function RefreshCategoryFilter()
+    for i = 1, #Scripts do
+        local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
+
+        if item then
+            if CurrentCategory == "Jeux" then
+                item.Visible = HasPlaceIds(Scripts[i])
+            else
+                item.Visible = not HasPlaceIds(Scripts[i])
+            end
+        end
+    end
+
+    RefreshCategoryButtons()
+    UpdateCanvasSize()
+end
+
+CategoryJeuxButton.MouseButton1Click:Connect(function()
+    CurrentCategory = "Jeux"
+    RefreshCategoryFilter()
+end)
+
+CategoryUniverselButton.MouseButton1Click:Connect(function()
+    CurrentCategory = "Universel"
+    RefreshCategoryFilter()
+end)
+
+if not IsMobile then
+    CategoryJeuxButton.MouseEnter:Connect(function()
+        TweenService:Create(
+            CategoryJeuxButton,
+            TweenInfo.new(0.15),
+            {BackgroundTransparency = 0.35}
+        ):Play()
+    end)
+
+    CategoryJeuxButton.MouseLeave:Connect(function()
+        TweenService:Create(
+            CategoryJeuxButton,
+            TweenInfo.new(0.15),
+            {BackgroundTransparency = 0.5}
+        ):Play()
+    end)
+
+    CategoryUniverselButton.MouseEnter:Connect(function()
+        TweenService:Create(
+            CategoryUniverselButton,
+            TweenInfo.new(0.15),
+            {BackgroundTransparency = 0.35}
+        ):Play()
+    end)
+
+    CategoryUniverselButton.MouseLeave:Connect(function()
+        TweenService:Create(
+            CategoryUniverselButton,
+            TweenInfo.new(0.15),
+            {BackgroundTransparency = 0.5}
+        ):Play()
+    end)
+end
+
+ScriptList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvasSize)
+
+RefreshCategoryFilter()
 
 UpdateAllScriptVisuals = function()
     if not ScrollFrame then
@@ -1364,54 +1572,47 @@ UpdateAllScriptVisuals = function()
     end
 
     for i = 1, #Scripts do
-        local item = ScrollFrame:FindFirstChild(
-            "ScriptItem_" .. i
-        )
+        local item = ScrollFrame:FindFirstChild("ScriptItem_" .. i)
 
         if item then
-            local toggle =
-                item:FindFirstChild("ToggleButton")
-
-            local indicator =
-                item:FindFirstChild("AutoIndicator")
+            local toggle = item:FindFirstChild("ToggleButton")
+            local indicator = item:FindFirstChild("AutoIndicator")
 
             if toggle then
-                if ScriptToggles[i] then
-                    toggle.Text = "✅ ACTIVÉ"
-                    toggle.BackgroundColor3 =
-                        Color3.fromRGB(40, 180, 80)
+                local ball = toggle:FindFirstChild("ToggleBall")
+                local stroke = toggle:FindFirstChild("ToggleStroke")
 
-                    toggle.BorderColor3 =
-                        Color3.fromRGB(40, 180, 80)
+                local enabled = ScriptToggles[i] == true
+                local color = enabled
+                    and Color3.fromRGB(85, 255, 0)
+                    or Color3.fromRGB(255, 80, 80)
 
-                    toggle.TextColor3 =
-                        Color3.fromRGB(180, 255, 200)
-                else
-                    toggle.Text = "❌ DÉSACTIVÉ"
-                    toggle.BackgroundColor3 =
-                        Color3.fromRGB(180, 40, 40)
+                toggle.BackgroundColor3 = color
 
-                    toggle.BorderColor3 =
-                        Color3.fromRGB(180, 40, 40)
+                if stroke then
+                    stroke.Color = color
+                end
 
-                    toggle.TextColor3 =
-                        Color3.fromRGB(255, 180, 180)
+                if ball then
+                    ball.Position = enabled
+                        and UDim2.new(0.61, 0, 0.133, 0)
+                        or UDim2.new(0.057, 0, 0.133, 0)
                 end
             end
 
             if indicator then
                 if ExecutedScripts[i] then
                     indicator.Text = "✅ Exécuté"
-                    indicator.TextColor3 =
-                        Color3.fromRGB(0, 255, 0)
+                    indicator.TextColor3 = Color3.fromRGB(90, 255, 120)
                 else
                     indicator.Text = "⏳ En attente"
-                    indicator.TextColor3 =
-                        Color3.fromRGB(200, 200, 200)
+                    indicator.TextColor3 = Color3.fromRGB(160, 160, 180)
                 end
             end
         end
     end
+
+    RefreshCategoryFilter()
 end
 
 MinimizeWindow = function()
@@ -1485,7 +1686,7 @@ RunService.RenderStepped:Connect(function()
             SetAutoIndicator(
                 i,
                 "⏳ En attente",
-                Color3.fromRGB(200, 200, 200)
+                Color3.fromRGB(160, 160, 180)
             )
         end
 
@@ -1515,52 +1716,38 @@ RunService.RenderStepped:Connect(function()
             ApplyLoadedFloatPosition()
         end
 
-        local newFontSize = GetAdaptiveFontSize()
-
-        Title.TextSize = newFontSize
+        Title.TextSize = IsMobile and 20 or 26
+        CategoryJeuxButton.TextSize = IsMobile and 20 or 25
+        CategoryUniverselButton.TextSize = IsMobile and 20 or 25
 
         for _, item in ipairs(ScrollFrame:GetChildren()) do
             if item:IsA("Frame")
                 and item.Name:match("^ScriptItem_") then
 
-                for _, child in ipairs(item:GetChildren()) do
-                    if child:IsA("TextButton") then
-                        if child.Name == "ExecuteButton" then
-                            local newWidth, newHeight =
-                                GetAdaptiveButtonSize()
+                local scriptName = item:FindFirstChild("ScriptName")
+                local placeInfo = item:FindFirstChild("PlaceInfo")
+                local autoIndicator = item:FindFirstChild("AutoIndicator")
+                local autoExeLabel = item:FindFirstChild("AutoExeLabel")
+                local executeButton = item:FindFirstChild("ExecuteButton")
 
-                            child.Size = UDim2.new(
-                                0,
-                                newWidth,
-                                0,
-                                newHeight
-                            )
+                if scriptName then
+                    scriptName.TextSize = GetAdaptiveFontSize()
+                end
 
-                            child.Position = UDim2.new(
-                                0.78,
-                                0,
-                                0.15,
-                                0
-                            )
+                if placeInfo then
+                    placeInfo.TextSize = GetButtonFontSize()
+                end
 
-                            child.TextSize =
-                                GetAdaptiveFontSize() - 4
-                        elseif child.Name == "ToggleButton" then
-                            child.TextSize =
-                                GetAdaptiveFontSize() - 4
-                        end
-                    elseif child:IsA("TextLabel") then
-                        if child.Name == "ScriptName" then
-                            child.TextSize =
-                                GetAdaptiveFontSize()
-                        elseif child.Name == "PlaceInfo" then
-                            child.TextSize =
-                                GetAdaptiveFontSize() - 5
-                        elseif child.Name == "AutoIndicator" then
-                            child.TextSize =
-                                GetAdaptiveFontSize() - 5
-                        end
-                    end
+                if autoIndicator then
+                    autoIndicator.TextSize = GetSmallFontSize()
+                end
+
+                if autoExeLabel then
+                    autoExeLabel.TextSize = GetSmallFontSize()
+                end
+
+                if executeButton then
+                    executeButton.TextSize = GetButtonFontSize()
                 end
             end
         end
