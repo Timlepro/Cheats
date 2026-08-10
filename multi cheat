@@ -21,6 +21,12 @@ local Scripts = {
         PlaceIds = {}
     },
     {
+        Name = "DEX Explorer++",
+        Url = "https://rawscripts.net/raw/Universal-Script-Dex-PlusPlus-Decompiler-Fix-206651",
+        requirePlaceId = false,
+        PlaceIds = {}
+    },
+    {
         Name = "Bee Swarm UI",
         Url = "https://raw.githubusercontent.com/Timlepro/Cheats/main/Bee%20Swarm%20UI",
         requirePlaceId = true,
