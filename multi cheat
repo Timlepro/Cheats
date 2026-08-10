@@ -41,14 +41,8 @@ local Scripts = {
     {
         Name = "Bonk & Blast",
         Url = "https://raw.githubusercontent.com/sagor112233829/Bonk-and-block-script-/refs/heads/main/obfuscated_script-1779031691005.lua.txt",
-        requirePlaceId = false,
-        PlaceIds = {}
-    },
-    {
-        Name = "Rivals",
-        Url = "https://raw.githubusercontent.com/tbao143/thaibao/main/TbaoHubRivals",
-        requirePlaceId = false,
-        PlaceIds = {}
+        requirePlaceId = true,
+        PlaceIds = {129253568870286}
     },
 }
 
