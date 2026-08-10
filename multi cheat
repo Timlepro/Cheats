@@ -48,7 +48,7 @@ local Scripts = {
         Name = "Backrooms Company",
         Url = "https://raw.githubusercontent.com/terryewq/Backrooms-Company-Script-roblox/refs/heads/main/Backrooms%20Company%20script",
         requirePlaceId = true,
-        PlaceIds = {129253568870286}
+        PlaceIds = {109423220190564}
     },
 }
 
