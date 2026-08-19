@@ -1,0 +1,424 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local BUILD = "v4.8.0"
+
+local function getUiParent()
+	local ok, result = pcall(function()
+		if gethui then
+			return gethui()
+		end
+	end)
+
+	if ok and result then
+		return result
+	end
+
+	return player:WaitForChild("PlayerGui")
+end
+
+local parent = getUiParent()
+
+local old = parent:FindFirstChild("PI_InfinityX")
+if old then
+	old:Destroy()
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "PI_InfinityX"
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.DisplayOrder = 999999
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = parent
+
+local main = Instance.new("Frame")
+main.Name = "MainWindow"
+main.AnchorPoint = Vector2.new(0.5, 0.5)
+main.Size = UDim2.fromScale(0.03, 0.03)
+main.Position = UDim2.fromScale(0.5, 0.5)
+main.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
+main.BorderSizePixel = 0
+main.Active = true
+main.ClipsDescendants = true
+main.Parent = gui
+
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(14, 14, 24)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 18, 36)),
+})
+gradient.Rotation = 15
+gradient.Parent = main
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Name = "NeonBorder"
+mainStroke.Color = Color3.fromRGB(0, 210, 255)
+mainStroke.Thickness = 2
+mainStroke.Transparency = 0.15
+mainStroke.Parent = main
+
+local top = Instance.new("Frame")
+top.Name = "Topbar"
+top.Size = UDim2.fromScale(1, 0.13)
+top.Position = UDim2.fromScale(0, 0)
+top.BackgroundColor3 = Color3.fromRGB(24, 24, 38)
+top.BorderSizePixel = 0
+top.Parent = main
+
+local topStroke = Instance.new("UIStroke")
+topStroke.Color = Color3.fromRGB(0, 190, 255)
+topStroke.Thickness = 1
+topStroke.Transparency = 0.25
+topStroke.Parent = top
+
+local bolt = Instance.new("TextLabel")
+bolt.Name = "Bolt"
+bolt.Size = UDim2.fromScale(0.08, 1)
+bolt.Position = UDim2.fromScale(0.015, 0)
+bolt.BackgroundTransparency = 1
+bolt.Text = "⚡"
+bolt.TextColor3 = Color3.fromRGB(255, 170, 35)
+bolt.TextScaled = true
+bolt.Font = Enum.Font.GothamBold
+bolt.Parent = top
+
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Size = UDim2.fromScale(0.67, 1)
+title.Position = UDim2.fromScale(0.09, 0)
+title.BackgroundTransparency = 1
+title.Text = "POST IT INFINITY X"
+title.TextColor3 = Color3.fromRGB(0, 220, 255)
+title.TextScaled = true
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.GothamBold
+title.Parent = top
+
+local build = Instance.new("TextLabel")
+build.Name = "Build"
+build.Size = UDim2.fromScale(0.12, 0.54)
+build.Position = UDim2.fromScale(0.78, 0.23)
+build.BackgroundColor3 = Color3.fromRGB(43, 43, 65)
+build.BorderSizePixel = 0
+build.Text = BUILD
+build.TextColor3 = Color3.fromRGB(205, 215, 255)
+build.TextScaled = true
+build.Font = Enum.Font.Code
+build.Parent = top
+
+local close = Instance.new("TextButton")
+close.Name = "Close"
+close.Size = UDim2.fromScale(0.065, 0.64)
+close.Position = UDim2.fromScale(0.925, 0.18)
+close.BackgroundColor3 = Color3.fromRGB(175, 24, 50)
+close.BorderSizePixel = 0
+close.Text = "X"
+close.TextColor3 = Color3.fromRGB(255, 255, 255)
+close.TextScaled = true
+close.Font = Enum.Font.GothamBold
+close.AutoButtonColor = false
+close.Parent = top
+
+local body = Instance.new("Frame")
+body.Name = "Body"
+body.Size = UDim2.fromScale(0.96, 0.76)
+body.Position = UDim2.fromScale(0.02, 0.155)
+body.BackgroundTransparency = 1
+body.Parent = main
+
+local left = Instance.new("Frame")
+left.Name = "LeftPanel"
+left.Size = UDim2.fromScale(0.47, 1)
+left.Position = UDim2.fromScale(0, 0)
+left.BackgroundTransparency = 1
+left.Parent = body
+
+local actionTitle = Instance.new("TextLabel")
+actionTitle.Name = "ActionTitle"
+actionTitle.Size = UDim2.fromScale(1, 0.08)
+actionTitle.Position = UDim2.fromScale(0, 0)
+actionTitle.BackgroundTransparency = 1
+actionTitle.Text = "» ACTIONS «"
+actionTitle.TextColor3 = Color3.fromRGB(0, 220, 255)
+actionTitle.TextScaled = true
+actionTitle.TextXAlignment = Enum.TextXAlignment.Left
+actionTitle.Font = Enum.Font.GothamBold
+actionTitle.Parent = left
+
+local buttonContainer = Instance.new("Frame")
+buttonContainer.Name = "ButtonContainer"
+buttonContainer.Size = UDim2.fromScale(1, 0.90)
+buttonContainer.Position = UDim2.fromScale(0, 0.095)
+buttonContainer.BackgroundTransparency = 1
+buttonContainer.ClipsDescendants = true
+buttonContainer.Parent = left
+
+local buttonList = Instance.new("UIListLayout")
+buttonList.Padding = UDim.new(0.012, 0)
+buttonList.SortOrder = Enum.SortOrder.LayoutOrder
+buttonList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+buttonList.VerticalAlignment = Enum.VerticalAlignment.Top
+buttonList.Parent = buttonContainer
+
+local separator = Instance.new("Frame")
+separator.Name = "Separator"
+separator.Size = UDim2.fromScale(0.002, 0.98)
+separator.Position = UDim2.fromScale(0.485, 0.01)
+separator.BackgroundColor3 = Color3.fromRGB(0, 190, 255)
+separator.BackgroundTransparency = 0.2
+separator.BorderSizePixel = 0
+separator.Parent = body
+
+local right = Instance.new("Frame")
+right.Name = "ConsolePanel"
+right.Size = UDim2.fromScale(0.495, 1)
+right.Position = UDim2.fromScale(0.505, 0)
+right.BackgroundColor3 = Color3.fromRGB(8, 8, 16)
+right.BorderSizePixel = 0
+right.Parent = body
+
+local rightStroke = Instance.new("UIStroke")
+rightStroke.Name = "ConsoleBorder"
+rightStroke.Color = Color3.fromRGB(58, 62, 90)
+rightStroke.Thickness = 1
+rightStroke.Parent = right
+
+local consoleTitle = Instance.new("TextLabel")
+consoleTitle.Name = "ConsoleTitle"
+consoleTitle.Size = UDim2.fromScale(0.92, 0.09)
+consoleTitle.Position = UDim2.fromScale(0.04, 0.025)
+consoleTitle.BackgroundTransparency = 1
+consoleTitle.Text = "» CONSOLE «"
+consoleTitle.TextColor3 = Color3.fromRGB(0, 220, 255)
+consoleTitle.TextScaled = true
+consoleTitle.TextXAlignment = Enum.TextXAlignment.Left
+consoleTitle.Font = Enum.Font.GothamBold
+consoleTitle.Parent = right
+
+local logBox = Instance.new("TextLabel")
+logBox.Name = "Console"
+logBox.Size = UDim2.fromScale(0.92, 0.83)
+logBox.Position = UDim2.fromScale(0.04, 0.13)
+logBox.BackgroundColor3 = Color3.fromRGB(4, 4, 10)
+logBox.BorderSizePixel = 0
+logBox.Text = "[system] Post It Infinity X loaded\n[system] waiting for command"
+logBox.TextColor3 = Color3.fromRGB(125, 255, 150)
+logBox.TextSize = 15
+logBox.TextXAlignment = Enum.TextXAlignment.Left
+logBox.TextYAlignment = Enum.TextYAlignment.Top
+logBox.TextWrapped = true
+logBox.Font = Enum.Font.Code
+logBox.Parent = right
+
+local status = Instance.new("TextLabel")
+status.Name = "Status"
+status.Size = UDim2.fromScale(0.96, 0.045)
+status.Position = UDim2.fromScale(0.02, 0.94)
+status.BackgroundTransparency = 1
+status.Text = "◆ Status: ready"
+status.TextColor3 = Color3.fromRGB(205, 215, 255)
+status.TextScaled = true
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Font = Enum.Font.Gotham
+status.Parent = main
+
+local logs = {
+	"[system] Post It Infinity X loaded",
+	"[system] waiting for command",
+}
+
+local function addLog(text)
+	table.insert(logs, "[" .. os.date("%H:%M:%S") .. "] " .. tostring(text))
+
+	while #logs > 12 do
+		table.remove(logs, 1)
+	end
+
+	logBox.Text = table.concat(logs, "\n")
+end
+
+local function setStatus(text)
+	status.Text = "◆ Status: " .. tostring(text)
+end
+
+local function makeButton(text, order, special)
+	local button = Instance.new("TextButton")
+	button.Name = text:gsub("%s+", "")
+	button.Size = UDim2.fromScale(1, 0.095)
+	button.BackgroundColor3 = special and Color3.fromRGB(50, 42, 30) or Color3.fromRGB(34, 34, 50)
+	button.BorderSizePixel = 0
+	button.Text = text
+	button.TextColor3 = Color3.fromRGB(240, 242, 255)
+	button.TextScaled = true
+	button.Font = Enum.Font.GothamBold
+	button.LayoutOrder = order
+	button.AutoButtonColor = false
+	button.Parent = buttonContainer
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Name = "ButtonBorder"
+	stroke.Color = special and Color3.fromRGB(255, 185, 55) or Color3.fromRGB(64, 70, 100)
+	stroke.Thickness = 1
+	stroke.Transparency = 0.1
+	stroke.Parent = button
+
+	button.MouseEnter:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.12), {
+			BackgroundColor3 = special and Color3.fromRGB(70, 54, 30) or Color3.fromRGB(48, 48, 70),
+		}):Play()
+
+		TweenService:Create(stroke, TweenInfo.new(0.12), {
+			Color = Color3.fromRGB(0, 220, 255),
+			Thickness = 2,
+		}):Play()
+	end)
+
+	button.MouseLeave:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.12), {
+			BackgroundColor3 = special and Color3.fromRGB(50, 42, 30) or Color3.fromRGB(34, 34, 50),
+		}):Play()
+
+		TweenService:Create(stroke, TweenInfo.new(0.12), {
+			Color = special and Color3.fromRGB(255, 185, 55) or Color3.fromRGB(64, 70, 100),
+			Thickness = 1,
+		}):Play()
+	end)
+
+	return button
+end
+
+local function findRemote(name)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:WaitForChild("Remotes", 5)
+	if not remotes then
+		return nil
+	end
+
+	local direct = remotes:FindFirstChild(name)
+	if direct then
+		return direct
+	end
+
+	local admin = remotes:FindFirstChild("AdminRemotes")
+	if admin then
+		return admin:FindFirstChild(name)
+	end
+
+	return nil
+end
+
+local function runRemote(remoteName, mode, args)
+	local remote = findRemote(remoteName)
+
+	if not remote then
+		addLog("remote not found: " .. remoteName)
+		setStatus("remote missing")
+		return
+	end
+
+	if mode == "function" and remote:IsA("RemoteFunction") then
+		pcall(function()
+			remote:InvokeServer(table.unpack(args or {}))
+		end)
+	elseif remote:IsA("RemoteEvent") then
+		pcall(function()
+			remote:FireServer(table.unpack(args or {}))
+		end)
+	end
+end
+
+local function action(label, remoteName, mode, args)
+	setStatus(label .. "...")
+	addLog("scanning server endpoints")
+	task.wait(0.12)
+	addLog("found endpoint: " .. remoteName)
+	task.wait(0.12)
+	addLog("sending payload")
+	task.wait(0.08)
+
+	runRemote(remoteName, mode or "event", args or {})
+
+	task.wait(0.18)
+	addLog("payload accepted")
+	setStatus("processing")
+end
+
+local buttons = {
+	{ text = "Give 999 Tokens", remote = "GiveTokens", mode = "event", args = {999}, special = true },
+	{ text = "Set Tokens 9999", remote = "SetTokens", mode = "event", args = {9999}, special = true },
+	{ text = "Claim Free Post-its", remote = "ClaimFreePostIts", mode = "event", args = {50}, special = true },
+	{ text = "Unlock All Skins", remote = "UnlockAllSkins", mode = "event", args = {} },
+	{ text = "Give All Skins", remote = "GiveAllSkins", mode = "event", args = {} },
+	{ text = "Claim Starter Pack", remote = "GiveStarterPack", mode = "event", args = {} },
+	{ text = "Set Streak 999", remote = "SetStreak", mode = "event", args = {999} },
+	{ text = "Bypass Purchase", remote = "BypassPurchase", mode = "function", args = {} },
+}
+
+for index, info in ipairs(buttons) do
+	local button = makeButton(info.text, index, info.special)
+
+	button.Activated:Connect(function()
+		action(info.text, info.remote, info.mode, info.args)
+	end)
+end
+
+close.MouseEnter:Connect(function()
+	TweenService:Create(close, TweenInfo.new(0.12), {
+		BackgroundColor3 = Color3.fromRGB(220, 30, 60),
+	}):Play()
+end)
+
+close.MouseLeave:Connect(function()
+	TweenService:Create(close, TweenInfo.new(0.12), {
+		BackgroundColor3 = Color3.fromRGB(175, 24, 50),
+	}):Play()
+end)
+
+close.Activated:Connect(function()
+	gui:Destroy()
+end)
+
+local dragging = false
+local dragStart = nil
+local startPosition = nil
+
+top.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPosition = main.Position
+	end
+end)
+
+top.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if not dragging or not dragStart or not startPosition then
+		return
+	end
+
+	if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+		return
+	end
+
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+	local delta = input.Position - dragStart
+
+	main.Position = UDim2.fromScale(
+		startPosition.X.Scale + delta.X / math.max(viewport.X, 1),
+		startPosition.Y.Scale + delta.Y / math.max(viewport.Y, 1)
+	)
+end)
+
+TweenService:Create(main, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	Size = UDim2.fromScale(0.50, 0.55),
+	Position = UDim2.fromScale(0.5, 0.5),
+}):Play()
